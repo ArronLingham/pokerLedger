@@ -23,7 +23,22 @@ export type Game = {
   played_on: string;
   status: GameStatus;
   notes: string;
+  join_code: string | null;
   created_at: string;
+};
+
+export type PlayerStatus = "pending" | "approved" | "rejected" | "left";
+
+export type GamePlayer = {
+  id: string;
+  game_id: string;
+  profile_id: string | null;
+  member_id: string | null;
+  is_guest: boolean;
+  status: PlayerStatus;
+  nickname: string;
+  seat: number | null;
+  joined_at: string;
 };
 
 export type GameResult = {

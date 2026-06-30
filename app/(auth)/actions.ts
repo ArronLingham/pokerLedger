@@ -21,8 +21,11 @@ export async function login(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
 
+  const next = String(formData.get("next") ?? "");
+  const dest = next.startsWith("/") ? next : "/dashboard";
+
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(dest);
 }
 
 export async function signup(

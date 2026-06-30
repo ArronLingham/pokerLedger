@@ -16,6 +16,8 @@ export default async function LedgerPage() {
     resultsByGame.set(r.game_id, arr);
   }
 
+  const finishedGames = games.filter((g) => g.status === "finished");
+
   // Members sorted by lifetime net, biggest winners first.
   const standings = members
     .map((m) => ({
@@ -135,11 +137,11 @@ export default async function LedgerPage() {
         <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted">
           Games
         </h2>
-        {games.length === 0 ? (
+        {finishedGames.length === 0 ? (
           <p className="text-sm text-muted">No games recorded yet.</p>
         ) : (
           <div className="flex flex-col gap-2">
-            {games.map((g) => {
+            {finishedGames.map((g) => {
               const gr = resultsByGame.get(g.id) ?? [];
               return (
                 <Card key={g.id}>

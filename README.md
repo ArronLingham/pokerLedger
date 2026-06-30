@@ -46,16 +46,23 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxx
 
 ### 3. Apply the database schema
 
-In the Supabase dashboard → **SQL Editor**, paste and run the contents of
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql). This
-creates the tables, Row-Level Security policies, and the trigger that creates a
-profile row on signup.
+In the Supabase dashboard → **SQL Editor**, paste and run **each migration in
+order**:
 
-### 4. (Recommended for testing) Disable email confirmation
+1. [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) —
+   tables, Row-Level Security, and the signup trigger.
+2. [`supabase/migrations/0002_live_games.sql`](supabase/migrations/0002_live_games.sql)
+   — live games: join codes, the lobby roster, join RPCs, and realtime.
 
-So you can sign up and log in immediately:
-**Authentication → Sign In / Providers → Email → turn off "Confirm email"**.
-Leave it on for production if you prefer.
+### 4. Auth settings
+
+- **Disable email confirmation (recommended for testing):**
+  **Authentication → Sign In / Providers → Email → turn off "Confirm email"**
+  so you can sign up and log in immediately.
+- **Enable anonymous sign-ins (required for guest join):**
+  **Authentication → Sign In / Providers → turn on "Anonymous sign-ins"**.
+  This is how guests join a game without an account (and can claim their history
+  later).
 
 ### 5. Run
 
@@ -79,6 +86,20 @@ Vercel.
   settlements, an auto-computed **settle-up** plan (fewest payments), and full
   game history. "Mark paid" records a settlement and updates balances.
 
+## Live games (Phase 2)
+
+- **Start a live game** (dashboard → "Start live game") — generates a join
+  **code**, a shareable **link**, and a **QR code** in the lobby.
+- **Join** at `/join/<code>` (scan the QR or open the link):
+  - **Logged-in players** are auto-approved (their login proves who they are).
+  - **Guests** pick a nickname and join via an anonymous session, landing in a
+    **pending** state until the host approves them.
+- **Lobby** (host) — see players arrive in realtime, **approve/reject** guests,
+  then **Start** the game.
+- **End game → record results** — enter each player's buy-in/cash-out, map them
+  to a ledger player (existing or new), and it writes straight into the Account
+  Sheet from Phase 1.
+
 ## Deploy
 
 Push to GitHub and import into [Vercel](https://vercel.com/new). Add the two
@@ -87,8 +108,6 @@ The Supabase backend is already hosted.
 
 ## Roadmap
 
-- **Phase 2** — host creates a game → join via code/link/QR; guests need host
-  approval; logged-in players auto-approved.
 - **Phase 3** — live Chip Tracker (digital chips, physical cards).
 - **Phase 4** — Chip Counter (manual entry).
 - **Phase 5** — Dealer + full PokerNow-style play.
