@@ -19,9 +19,14 @@ tracking, and dealing come in later phases (see
 ### 1. Create a Supabase project
 
 1. Go to [supabase.com](https://supabase.com) → **New project**.
-2. Once created, open **Project Settings → API** and copy:
+2. Once created, click **Connect** (top bar) → **App Frameworks** (or
+   **Project Settings → API**) and copy:
    - **Project URL**
-   - **anon public** key
+   - the **publishable key** (`sb_publishable_...`)
+
+   > Note: Supabase's Connect screen also offers an "Add files" step that drops
+   > client helpers into `utils/supabase/`. **Skip it** — this project already
+   > has equivalents in `lib/supabase/`. You only need the env values.
 
 ### 2. Configure environment
 
@@ -33,8 +38,11 @@ Fill in `.env.local`:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxx
 ```
+
+(If your project still shows a legacy **anon** key instead, you can set
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` — the app accepts either.)
 
 ### 3. Apply the database schema
 
