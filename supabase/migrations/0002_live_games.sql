@@ -35,6 +35,7 @@ create index if not exists game_players_profile_id_idx on public.game_players (p
 alter table public.game_players enable row level security;
 
 -- Host can do anything with players in their own games.
+drop policy if exists "hosts manage players in their games" on public.game_players;
 create policy "hosts manage players in their games"
   on public.game_players for all
   to authenticated
@@ -52,6 +53,7 @@ create policy "hosts manage players in their games"
   );
 
 -- A player can read their own roster row (to watch their approval status).
+drop policy if exists "players read their own row" on public.game_players;
 create policy "players read their own row"
   on public.game_players for select
   to authenticated
@@ -59,6 +61,7 @@ create policy "players read their own row"
 
 -- A player can update their own row (e.g. leave, change nickname) but cannot
 -- escalate status — joining/approval is mediated by RPCs / the host.
+drop policy if exists "players update their own row" on public.game_players;
 create policy "players update their own row"
   on public.game_players for update
   to authenticated
@@ -80,6 +83,7 @@ $$;
 
 grant execute on function public.is_game_participant(uuid) to authenticated;
 
+drop policy if exists "players read games they joined" on public.games;
 create policy "players read games they joined"
   on public.games for select
   to authenticated
