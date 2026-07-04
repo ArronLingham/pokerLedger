@@ -53,6 +53,10 @@ order**:
    tables, Row-Level Security, and the signup trigger.
 2. [`supabase/migrations/0002_live_games.sql`](supabase/migrations/0002_live_games.sql)
    — live games: join codes, the lobby roster, join RPCs, and realtime.
+3. [`supabase/migrations/0003_chip_tracker.sql`](supabase/migrations/0003_chip_tracker.sql)
+   — chip tracker: stacks/blinds/button, `hands` + `hand_players`, realtime.
+4. [`supabase/migrations/0004_betting_engine.sql`](supabase/migrations/0004_betting_engine.sql)
+   — the betting engine RPCs (`start_hand`, `player_action`, `declare_winners`).
 
 ### 4. Auth settings
 
@@ -99,6 +103,21 @@ Vercel.
 - **End game → record results** — enter each player's buy-in/cash-out, map them
   to a ledger player (existing or new), and it writes straight into the Account
   Sheet from Phase 1.
+
+## Chip Tracker (Phase 3)
+
+Once a game is **active**, the host opens the **table** and taps **Deal next
+hand**; players act on their own phones (fold/check/call/bet/raise/all-in) in
+turn, with blinds, the dealer button, and betting rounds enforced. Cards are
+physical, so at showdown the **host taps the winning seat(s)** to award the pot.
+Ending the game pre-fills the results form from each player's tracked stack.
+
+Verify the engine with the harness (needs migrations 0001–0004 applied and
+"Confirm email" off):
+
+```bash
+node scripts/engine-test.mjs
+```
 
 ## Deploy
 

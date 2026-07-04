@@ -67,6 +67,7 @@ export function Lobby({
   async function start() {
     setStatus("active");
     await supabase.from("games").update({ status: "active" }).eq("id", game.id);
+    router.push(`/games/${game.id}/table`);
   }
 
   function endGame() {

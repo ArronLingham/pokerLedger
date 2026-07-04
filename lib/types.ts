@@ -16,6 +16,8 @@ export type Member = {
 
 export type GameStatus = "lobby" | "active" | "finished";
 
+export type ChipDenomination = { value: number; label?: string; color?: string };
+
 export type Game = {
   id: string;
   host_id: string;
@@ -24,6 +26,10 @@ export type Game = {
   status: GameStatus;
   notes: string;
   join_code: string | null;
+  small_blind: number;
+  big_blind: number;
+  dealer_seat: number | null;
+  denominations: ChipDenomination[] | null;
   created_at: string;
 };
 
@@ -38,7 +44,39 @@ export type GamePlayer = {
   status: PlayerStatus;
   nickname: string;
   seat: number | null;
+  buy_in: number;
+  stack: number;
   joined_at: string;
+};
+
+export type HandStreet = "preflop" | "flop" | "turn" | "river";
+export type HandStatus = "betting" | "awaiting_showdown" | "complete";
+
+export type Hand = {
+  id: string;
+  game_id: string;
+  hand_number: number;
+  dealer_seat: number;
+  street: HandStreet;
+  status: HandStatus;
+  current_turn: string | null;
+  current_bet: number;
+  last_raise: number;
+  pot: number;
+  created_at: string;
+};
+
+export type HandPlayerStatus = "active" | "folded" | "all_in";
+
+export type HandPlayer = {
+  id: string;
+  hand_id: string;
+  player_id: string;
+  seat: number;
+  committed: number;
+  committed_street: number;
+  status: HandPlayerStatus;
+  has_acted: boolean;
 };
 
 export type GameResult = {

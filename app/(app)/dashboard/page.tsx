@@ -40,7 +40,14 @@ export default async function DashboardPage() {
           </h2>
           <div className="flex flex-col gap-2">
             {liveGames.map((g) => (
-              <Link key={g.id} href={`/games/${g.id}/lobby`}>
+              <Link
+                key={g.id}
+                href={
+                  g.status === "active"
+                    ? `/games/${g.id}/table`
+                    : `/games/${g.id}/lobby`
+                }
+              >
                 <Card className="flex items-center justify-between hover:border-accent">
                   <div>
                     <div className="font-medium">{g.name || "Live game"}</div>

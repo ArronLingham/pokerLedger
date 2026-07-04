@@ -31,8 +31,9 @@ export function CloseGameForm({
       player_id: p.id,
       nickname: p.nickname || "Player",
       member_id: p.member_id ?? "",
-      buy_in: "",
-      cash_out: "",
+      // Pre-filled from the chip tracker when it was used (0 => blank).
+      buy_in: p.buy_in ? String(p.buy_in) : "",
+      cash_out: p.stack ? String(p.stack) : "",
     })),
   );
 
