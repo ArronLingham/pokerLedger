@@ -190,6 +190,29 @@ async function run() {
     await sb.from("games").delete().eq("id", gameId);
   }
 
+  // --- Scenario 4: heads-up all-in and call, seat 2 wins ------------------
+  {
+    const gameId = await createGame(hostId);
+    await addPlayers(gameId, [100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    // seat1 (SB/dealer, first to act) shoves; seat2 (BB) calls.
+    await act(handId, "all_in");
+    await act(handId, "call");
+
+    const h = await currentHand(gameId);
+    assert("S4 both all-in → showdown", h.status === "awaiting_showdown", `status=${h.status}`);
+
+    const { data: p2 } = await sb.from("game_players").select("id").eq("game_id", gameId).eq("seat", 2).single();
+    await sb.rpc("declare_winners", { p_hand_id: handId, p_winner_ids: [p2.id] });
+
+    const s = await stacks(gameId);
+    assert("S4 chips conserved (200)", total(s) === 200, JSON.stringify(s));
+    assert("S4 winner seat2 = 200", s[2] === 200, JSON.stringify(s));
+    assert("S4 loser seat1 = 0", s[1] === 0, JSON.stringify(s));
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
   process.exit(failures === 0 ? 0 : 1);
 }
