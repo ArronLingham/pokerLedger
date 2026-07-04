@@ -75,14 +75,29 @@ export function Lobby({
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(joinUrl);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(joinUrl);
+      } else {
+        // Clipboard API is blocked on insecure origins (http on a LAN IP) —
+        // fall back to a hidden textarea + execCommand.
+        const ta = document.createElement("textarea");
+        ta.value = joinUrl;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard may be unavailable; ignore
+      // Even the fallback can fail — the URL is shown as text to copy manually.
     }
   }
 
+  const isLocalhost = /localhost|127\.0\.0\.1/.test(joinUrl);
   const pending = players.filter((p) => p.status === "pending");
   const approved = players.filter((p) => p.status === "approved");
 
@@ -109,6 +124,20 @@ export function Lobby({
         <Button variant="secondary" onClick={copyLink} className="w-full">
           {copied ? "Copied ✓" : "Copy join link"}
         </Button>
+        {joinUrl ? (
+          <p className="w-full break-all rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted select-all">
+            {joinUrl}
+          </p>
+        ) : null}
+        {isLocalhost ? (
+          <p className="w-full rounded-lg bg-negative/15 px-3 py-2 text-xs text-negative">
+            This link points at <span className="font-mono">localhost</span>, so
+            phones can’t reach it. Open this app on your computer using its
+            network address (e.g.{" "}
+            <span className="font-mono">http://192.168.x.x:3000</span>) and
+            create the game there.
+          </p>
+        ) : null}
       </Card>
 
       {/* Pending approvals */}
