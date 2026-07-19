@@ -3,10 +3,7 @@
 Track home poker games, balances, and exactly who owes whom — a mobile-first
 web app (PWA) you can run on your phone or laptop.
 
-This is **Phase 1**: accounts, player tracking, manual game recording, and the
-Account Sheet (lifetime net P/L + settle-up). Live games, QR-code joining, chip
-tracking, and dealing come in later phases (see
-`~/.claude/plans/i-had-an-idea-precious-frost.md` for the full roadmap).
+This app is **feature-complete (Phases 1 through 5)**: accounts, player tracking, manual game recording, the Account Sheet (lifetime net P/L + settle-up), live games with QR-code joining, a full realtime betting engine with side pots, and a fully digital dealing mode.
 
 ## Tech stack
 
@@ -57,6 +54,10 @@ order**:
    — chip tracker: stacks/blinds/button, `hands` + `hand_players`, realtime.
 4. [`supabase/migrations/0004_betting_engine.sql`](supabase/migrations/0004_betting_engine.sql)
    — the betting engine RPCs (`start_hand`, `player_action`, `declare_winners`).
+5. [`supabase/migrations/0005_side_pots.sql`](supabase/migrations/0005_side_pots.sql)
+   — side pot calculation and uncalled bet refunds.
+6. [`supabase/migrations/0006_digital_cards.sql`](supabase/migrations/0006_digital_cards.sql)
+   — digital cards mode (deck, board, hole cards) and automatic hand evaluation.
 
 ### 4. Auth settings
 
@@ -108,11 +109,15 @@ Vercel.
 
 Once a game is **active**, the host opens the **table** and taps **Deal next
 hand**; players act on their own phones (fold/check/call/bet/raise/all-in) in
-turn, with blinds, the dealer button, and betting rounds enforced. Cards are
-physical, so at showdown the **host taps the winning seat(s)** to award the pot.
-Ending the game pre-fills the results form from each player's tracked stack.
+turn, with blinds, the dealer button, and betting rounds enforced. The betting engine uses Postgres RPCs for strict server-side validation. Ending the game pre-fills the results form from each player's tracked stack.
 
-Verify the engine with the harness (needs migrations 0001–0004 applied and
+## Advanced Engine & Digital Cards (Phases 4 & 5)
+
+- **Chip Counter (Phase 4)** — A visual modal that lets players/host calculate exact chip values (e.g. 5 reds, 2 blues) using predefined chip denominations.
+- **Side Pots (Phase 4)** — If a player goes all-in, the engine correctly handles multiple side pots and uncalled bet refunds.
+- **Digital Cards (Phase 5)** — Play a full game of Texas Hold'em without physical cards! The app shuffles a 52-card deck, deals 2 hole cards to each player (hold-to-peek), and deals the community cards. At showdown, the app automatically evaluates the winning hands using standard poker rules and awards the pots.
+
+Verify the engine with the harness (needs all migrations applied and
 "Confirm email" off):
 
 ```bash
@@ -127,6 +132,8 @@ The Supabase backend is already hosted.
 
 ## Roadmap
 
-- **Phase 3** — live Chip Tracker (digital chips, physical cards).
-- **Phase 4** — Chip Counter (manual entry).
-- **Phase 5** — Dealer + full PokerNow-style play.
+- [x] **Phase 1** — Accounts, player profiles, Account Sheet (P/L + settle-up).
+- [x] **Phase 2** — Live games (join by QR/code, lobby, anonymous guests).
+- [x] **Phase 3** — Chip Tracker (betting engine, real-time actions).
+- [x] **Phase 4** — Chip Counter UI & Side Pots logic.
+- [x] **Phase 5** — Digital Dealer (server-side dealing and auto-evaluation).
