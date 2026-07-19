@@ -45,6 +45,7 @@ export default async function CloseGamePage({
         gameId={id}
         players={(players ?? []) as GamePlayer[]}
         members={(members ?? []) as Member[]}
+        denominations={game.denominations}
       />
     </>
   );

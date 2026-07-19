@@ -4,7 +4,8 @@ import { useActionState, useMemo, useState } from "react";
 import { closeGame, type GameState } from "../../actions";
 import { Button, Card, FormMessage, Input, Label } from "@/components/ui";
 import { formatMoney } from "@/lib/ledger";
-import type { GamePlayer, Member } from "@/lib/types";
+import type { GamePlayer, Member, ChipDenomination } from "@/lib/types";
+import { ChipCounter } from "@/components/chip-counter";
 
 const initial: GameState = {};
 
@@ -20,10 +21,12 @@ export function CloseGameForm({
   gameId,
   players,
   members,
+  denominations,
 }: {
   gameId: string;
   players: GamePlayer[];
   members: Member[];
+  denominations?: ChipDenomination[] | null;
 }) {
   const [state, formAction, pending] = useActionState(closeGame, initial);
   const [rows, setRows] = useState<RowState[]>(
@@ -36,6 +39,10 @@ export function CloseGameForm({
       cash_out: p.stack ? String(p.stack) : "",
     })),
   );
+  const [activeCounter, setActiveCounter] = useState<{
+    rowIdx: number;
+    field: "buy_in" | "cash_out";
+  } | null>(null);
 
   function update(i: number, patch: Partial<RowState>) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -123,7 +130,10 @@ export function CloseGameForm({
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Label htmlFor={`buyin-${i}`}>Buy-in</Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label htmlFor={`buyin-${i}`} className="mb-0">Buy-in</Label>
+                  <button type="button" onClick={() => setActiveCounter({rowIdx: i, field: "buy_in"})} className="text-xs text-accent">🧮 Count</button>
+                </div>
                 <Input
                   id={`buyin-${i}`}
                   inputMode="decimal"
@@ -133,7 +143,10 @@ export function CloseGameForm({
                 />
               </div>
               <div>
-                <Label htmlFor={`cashout-${i}`}>Cash-out</Label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <Label htmlFor={`cashout-${i}`} className="mb-0">Cash-out</Label>
+                  <button type="button" onClick={() => setActiveCounter({rowIdx: i, field: "cash_out"})} className="text-xs text-accent">🧮 Count</button>
+                </div>
                 <Input
                   id={`cashout-${i}`}
                   inputMode="decimal"
@@ -160,6 +173,17 @@ export function CloseGameForm({
       <Button type="submit" disabled={pending}>
         {pending ? "Saving…" : "Close game & save to ledger"}
       </Button>
+
+      {activeCounter && (
+        <ChipCounter
+          denominations={denominations}
+          onApply={(total) => {
+            update(activeCounter.rowIdx, { [activeCounter.field]: String(total) });
+            setActiveCounter(null);
+          }}
+          onCancel={() => setActiveCounter(null)}
+        />
+      )}
     </form>
   );
 }

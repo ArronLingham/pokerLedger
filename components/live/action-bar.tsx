@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Button, Card } from "@/components/ui";
-import { formatMoney } from "@/lib/ledger";
+import { formatMoney, formatChipsString } from "@/lib/ledger";
+import type { ChipDenomination } from "@/lib/types";
 
 export type ActionKind = "fold" | "check" | "call" | "bet" | "raise" | "all_in";
 
@@ -15,6 +16,8 @@ export function ActionBar({
   pot,
   busy,
   onAction,
+  showChips,
+  denominations,
 }: {
   stack: number;
   committedStreet: number;
@@ -24,6 +27,8 @@ export function ActionBar({
   pot: number;
   busy: boolean;
   onAction: (action: ActionKind, amountTo?: number) => void;
+  showChips?: boolean;
+  denominations?: ChipDenomination[] | null;
 }) {
   const toCall = Math.max(0, currentBet - committedStreet);
   const canCheck = toCall === 0;
@@ -41,6 +46,9 @@ export function ActionBar({
   function quick(target: number) {
     setAmountTo(Math.max(minTo, Math.min(Math.round(target), maxTo)));
   }
+
+  const format = (v: number) => 
+    showChips && denominations ? formatChipsString(v, denominations) : formatMoney(v);
 
   return (
     <Card className="sticky bottom-20 flex flex-col gap-3">
@@ -69,7 +77,7 @@ export function ActionBar({
             disabled={busy}
             onClick={() => onAction("call")}
           >
-            Call {formatMoney(Math.min(toCall, stack))}
+            Call {format(Math.min(toCall, stack))}
           </Button>
         )}
       </div>
@@ -86,7 +94,7 @@ export function ActionBar({
               onChange={(e) => setAmountTo(Number(e.target.value))}
               className="flex-1 accent-[var(--accent)]"
             />
-            <span className="w-20 text-right font-mono">{formatMoney(amt)}</span>
+            <span className="w-20 text-right font-mono text-sm">{format(amt)}</span>
           </div>
           <div className="flex gap-2 text-xs">
             <Button variant="secondary" className="flex-1 py-1.5" onClick={() => quick(minTo)}>
@@ -113,8 +121,8 @@ export function ActionBar({
               }
             >
               {amt >= maxTo
-                ? `All-in ${formatMoney(maxTo)}`
-                : `${isRaise ? "Raise to" : "Bet"} ${formatMoney(amt)}`}
+                ? `All-in ${format(maxTo)}`
+                : `${isRaise ? "Raise to" : "Bet"} ${format(amt)}`}
             </Button>
           </div>
         </>
@@ -124,7 +132,7 @@ export function ActionBar({
           disabled={busy}
           onClick={() => onAction("all_in")}
         >
-          All-in {formatMoney(maxTo)}
+          All-in {format(maxTo)}
         </Button>
       )}
     </Card>

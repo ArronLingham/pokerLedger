@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+// @ts-expect-error No types for pokersolver
+import { Hand as PokerHand } from "pokersolver";
 
 export type GameState = { error?: string };
 
@@ -212,4 +214,73 @@ export async function deleteGame(formData: FormData) {
   await supabase.from("games").delete().eq("id", id);
   revalidatePath("/ledger");
   revalidatePath("/dashboard");
+}
+
+export async function updateGameDenominations(formData: FormData) {
+  const supabase = await createClient();
+  const id = String(formData.get("id") ?? "");
+  const denominationsStr = String(formData.get("denominations") ?? "");
+  let denominations = null;
+  if (denominationsStr) {
+    try {
+      denominations = JSON.parse(denominationsStr);
+    } catch {
+      // ignore
+    }
+  }
+
+  await supabase.from("games").update({ denominations }).eq("id", id);
+}
+
+export async function evaluateShowdown(
+  handId: string,
+  potsToEvaluate: { pot_index: number; eligible_player_ids: string[] }[]
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: hand, error: handErr } = await supabase
+    .from("hands")
+    .select("*, games(host_id)")
+    .eq("id", handId)
+    .single();
+
+  if (handErr || !hand) return { error: "Hand not found" };
+  if (hand.games?.host_id !== user.id) return { error: "Only the host can evaluate." };
+
+  const board = hand.board || [];
+
+  const { data: players, error: playersErr } = await supabase
+    .from("hand_players")
+    .select("*")
+    .eq("hand_id", handId)
+    .in("status", ["active", "all_in"]);
+
+  if (playersErr || !players) return { error: "Could not fetch players" };
+
+  const results = [];
+  for (const sp of potsToEvaluate) {
+    const eligible = players.filter(p => sp.eligible_player_ids.includes(p.player_id));
+    if (eligible.length === 0) continue;
+
+    const playerHands = eligible.map(p => {
+      const cards = [...(p.hole_cards || []), ...board];
+      const handEval = PokerHand.solve(cards);
+      return { playerId: p.player_id, handEval };
+    });
+
+    const winningHands = PokerHand.winners(playerHands.map(p => p.handEval));
+    const winnerIds = playerHands
+      .filter(p => winningHands.includes(p.handEval))
+      .map(p => p.playerId);
+
+    results.push({
+      pot_index: sp.pot_index,
+      winner_ids: winnerIds,
+      description: winningHands[0]?.descr || "",
+    });
+  }
+
+  return { results };
 }

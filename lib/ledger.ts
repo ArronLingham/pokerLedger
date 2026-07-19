@@ -1,4 +1,4 @@
-import type { GameResult, Settlement } from "@/lib/types";
+import type { GameResult, Settlement, ChipDenomination } from "@/lib/types";
 
 /**
  * Net result from games per member: sum(cash_out - buy_in).
@@ -92,3 +92,25 @@ export function formatMoney(value: number): string {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${Math.abs(value).toFixed(2)}`;
 }
+
+export function formatChips(amount: number, denominations: ChipDenomination[]): { denom: ChipDenomination; count: number }[] {
+  const sorted = [...denominations].sort((a, b) => b.value - a.value);
+  const result: { denom: ChipDenomination; count: number }[] = [];
+  let remaining = amount;
+  for (const denom of sorted) {
+    if (remaining >= denom.value) {
+      const count = Math.floor(remaining / denom.value);
+      result.push({ denom, count });
+      remaining = remaining % denom.value;
+    }
+  }
+  return result;
+}
+
+export function formatChipsString(amount: number, denominations: ChipDenomination[]): string {
+  if (amount === 0) return "0";
+  const chips = formatChips(amount, denominations);
+  if (chips.length === 0) return formatMoney(amount);
+  return chips.map((c) => `${c.count}${c.denom.label || "x" + c.denom.value}`).join(" ");
+}
+

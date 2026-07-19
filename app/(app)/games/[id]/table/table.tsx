@@ -2,22 +2,28 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { clsx } from "@/lib/clsx";
 import { createClient } from "@/lib/supabase/client";
 import { Button, Card, Input, PageHeader } from "@/components/ui";
 import { formatMoney } from "@/lib/ledger";
 import { useLiveGame } from "@/components/live/use-live-game";
 import { TableBoard } from "@/components/live/table-board";
 import { ActionBar, type ActionKind } from "@/components/live/action-bar";
+import { evaluateShowdown } from "../../actions";
+import { ActionLog } from "@/components/live/action-log";
+import { ChipCounter } from "@/components/chip-counter";
 
 export function HostTable({ gameId }: { gameId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { game, players, hand, handPlayers, loading, refresh } =
+  const { game, players, hand, handPlayers, handActions, sidePots, loading, refresh } =
     useLiveGame(gameId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [buyIn, setBuyIn] = useState("100");
-  const [winners, setWinners] = useState<string[]>([]);
+  const [winnersByPot, setWinnersByPot] = useState<Record<number, string[]>>({});
+  const [showChips, setShowChips] = useState(false);
+  const [showCounter, setShowCounter] = useState(false);
 
   if (loading || !game) {
     return <p className="text-muted">Loading table…</p>;
@@ -78,7 +84,28 @@ export function HostTable({ gameId }: { gameId: string }) {
     });
   }
 
+  async function setDenominations(denoms: { value: number; color?: string; label?: string }[] | null) {
+    await run(async () => {
+      const { error } = await supabase
+        .from("games")
+        .update({ denominations: denoms })
+        .eq("id", gameId);
+      return { error };
+    });
+  }
+
+  async function setDigitalCards(digital: boolean) {
+    await run(async () => {
+      const { error } = await supabase
+        .from("games")
+        .update({ digital_cards: digital })
+        .eq("id", gameId);
+      return { error };
+    });
+  }
+
   async function startHand() {
+    setWinnersByPot({});
     await run(async () => supabase.rpc("start_hand", { p_game_id: gameId }));
   }
 
@@ -94,15 +121,66 @@ export function HostTable({ gameId }: { gameId: string }) {
   }
 
   async function declareWinners() {
-    if (!hand || winners.length === 0) return;
+    if (!hand) return;
+    const potsToEvaluate = sidePots.length > 0 ? sidePots : [
+      { pot_index: 0, amount: hand.pot, eligible_player_ids: inHand.map((hp) => hp.player_id) }
+    ];
+
+    const payload = potsToEvaluate.map((sp) => {
+      const selected = winnersByPot[sp.pot_index] || [];
+      // Auto-assign single eligible player if no selection was made
+      const finalWinners = sp.eligible_player_ids.length === 1 ? sp.eligible_player_ids : selected;
+      return {
+        pot_index: sp.pot_index,
+        winner_ids: finalWinners,
+      };
+    });
+
+    // Validation: make sure all pots have at least 1 winner
+    const missing = payload.find((p) => p.winner_ids.length === 0);
+    if (missing) {
+      setError(`Please select a winner for ${missing.pot_index === 0 ? "Main Pot" : `Side Pot ${missing.pot_index}`}`);
+      return;
+    }
+
     await run(async () =>
       supabase.rpc("declare_winners", {
         p_hand_id: hand.id,
-        p_winner_ids: winners,
+        p_winners: payload,
       }),
     );
-    setWinners([]);
+    setWinnersByPot({});
   }
+
+  async function autoEvaluateWinners() {
+    if (!hand) return;
+    setBusy(true);
+    setError(undefined);
+
+    const pots = sidePots.length > 0 ? sidePots : [
+      { pot_index: 0, amount: hand.pot, eligible_player_ids: inHand.map((hp) => hp.player_id) }
+    ];
+
+    const res = await evaluateShowdown(hand.id, pots.map(sp => ({
+      pot_index: sp.pot_index,
+      eligible_player_ids: sp.eligible_player_ids,
+    })));
+
+    if (res.error) {
+      setError(res.error);
+    } else if (res.results) {
+      const newWinners: Record<number, string[]> = {};
+      for (const p of res.results) {
+        newWinners[p.pot_index] = p.winner_ids;
+      }
+      setWinnersByPot(newWinners);
+    }
+    setBusy(false);
+  }
+
+  const potsToRender = sidePots.length > 0 ? sidePots : (hand && hand.status === "awaiting_showdown" ? [
+    { pot_index: 0, amount: hand.pot, eligible_player_ids: inHand.map((hp) => hp.player_id) }
+  ] : []);
 
   return (
     <>
@@ -110,13 +188,24 @@ export function HostTable({ gameId }: { gameId: string }) {
         title={game.name || "Live game"}
         subtitle="Host controls"
         action={
-          <Button
-            variant="secondary"
-            className="px-3 py-2 text-sm"
-            onClick={() => router.push(`/games/${gameId}/close`)}
-          >
-            End game
-          </Button>
+          <div className="flex items-center gap-2">
+            {game.denominations && game.denominations.length > 0 && (
+              <Button
+                variant="secondary"
+                className="px-3 py-2 text-sm"
+                onClick={() => setShowChips(!showChips)}
+              >
+                {showChips ? "Show Value" : "Show Chips"}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              className="px-3 py-2 text-sm"
+              onClick={() => router.push(`/games/${gameId}/close`)}
+            >
+              End game
+            </Button>
+          </div>
         }
       />
 
@@ -125,6 +214,8 @@ export function HostTable({ gameId }: { gameId: string }) {
         players={players}
         hand={hand}
         handPlayers={handPlayers}
+        sidePots={sidePots}
+        showChips={showChips}
       />
 
       {error ? (
@@ -137,7 +228,10 @@ export function HostTable({ gameId }: { gameId: string }) {
       {noHand ? (
         <div className="mt-4 flex flex-col gap-3">
           <Card className="flex flex-col gap-3">
-            <div className="text-sm font-medium">Chips</div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium">Chips</div>
+              <button type="button" onClick={() => setShowCounter(true)} className="text-xs text-accent">🧮 Count</button>
+            </div>
             <div className="flex items-center gap-2">
               <Input
                 inputMode="decimal"
@@ -196,6 +290,48 @@ export function HostTable({ gameId }: { gameId: string }) {
             </div>
           </Card>
 
+          <Card className="flex items-center justify-between">
+            <span className="text-sm">Denominations</span>
+            <div className="flex gap-2 text-xs">
+              <button
+                className="text-accent hover:underline"
+                onClick={() => setDenominations([{value: 1, label: "⚪"}, {value: 5, label: "🔴"}, {value: 25, label: "🟢"}])}
+              >
+                1/5/25
+              </button>
+              <button
+                className="text-accent hover:underline"
+                onClick={() => setDenominations([{value: 5, label: "🔴"}, {value: 25, label: "🟢"}, {value: 100, label: "⚫"}])}
+              >
+                5/25/100
+              </button>
+              <button
+                className="text-accent hover:underline"
+                onClick={() => setDenominations(null)}
+              >
+                Off
+              </button>
+            </div>
+          </Card>
+
+          <Card className="flex items-center justify-between">
+            <span className="text-sm">Cards</span>
+            <div className="flex gap-2 text-xs">
+              <button
+                className={clsx("hover:underline", !game.digital_cards ? "text-accent font-semibold" : "text-muted")}
+                onClick={() => setDigitalCards(false)}
+              >
+                Physical
+              </button>
+              <button
+                className={clsx("hover:underline", game.digital_cards ? "text-accent font-semibold" : "text-muted")}
+                onClick={() => setDigitalCards(true)}
+              >
+                Digital (App Deals)
+              </button>
+            </div>
+          </Card>
+
           <Button onClick={startHand} disabled={busy || withChips.length < 2}>
             {withChips.length < 2 ? "Give at least 2 players chips" : "Deal next hand"}
           </Button>
@@ -217,44 +353,97 @@ export function HostTable({ gameId }: { gameId: string }) {
             pot={hand.pot}
             busy={busy}
             onAction={act}
+            showChips={showChips}
+            denominations={game.denominations}
           />
         </div>
       ) : null}
 
-      {/* Showdown: declare winner(s) */}
+      {/* Showdown: declare winner(s) per pot */}
       {hand && hand.status === "awaiting_showdown" ? (
-        <Card className="mt-4 flex flex-col gap-3">
-          <div className="text-sm font-medium">
-            Who won? Select the winning player(s).
+        <Card className="mt-4 flex flex-col gap-4">
+          <div className="text-sm font-semibold text-foreground">
+            Showdown — Declare Pot Winner(s)
           </div>
-          {inHand.map((hp) => {
-            const p = players.find((pl) => pl.id === hp.player_id);
-            const checked = winners.includes(hp.player_id);
-            return (
-              <label
-                key={hp.id}
-                className="flex items-center gap-2 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(e) =>
-                    setWinners((w) =>
-                      e.target.checked
-                        ? [...w, hp.player_id]
-                        : w.filter((id) => id !== hp.player_id),
-                    )
-                  }
-                />
-                {p?.nickname || "Player"}
-              </label>
-            );
-          })}
-          <Button onClick={declareWinners} disabled={busy || winners.length === 0}>
-            Award {formatMoney(hand.pot)}
-          </Button>
+
+          <div className="flex flex-col gap-4">
+            {potsToRender.map((sp) => {
+              const potLabel = sp.pot_index === 0 ? "Main Pot" : `Side Pot ${sp.pot_index}`;
+              const isSingleEligible = sp.eligible_player_ids.length === 1;
+
+              return (
+                <div key={sp.pot_index} className="flex flex-col gap-2 border-b border-border pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">
+                      {potLabel}: <span className="font-semibold text-accent">{formatMoney(sp.amount)}</span>
+                    </span>
+                    {isSingleEligible ? (
+                      <span className="text-xs text-muted italic">Uncontested (Auto-awarded)</span>
+                    ) : null}
+                  </div>
+
+                  {isSingleEligible ? (
+                    <div className="text-xs text-muted pl-2">
+                      Winner:{" "}
+                      <span className="text-foreground font-medium">
+                        {players.find((pl) => pl.id === sp.eligible_player_ids[0])?.nickname ?? "Player"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3 pl-2 pt-1">
+                      {sp.eligible_player_ids.map((pid) => {
+                        const p = players.find((pl) => pl.id === pid);
+                        const checked = (winnersByPot[sp.pot_index] || []).includes(pid);
+                        return (
+                          <label key={pid} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(e) => {
+                                const current = winnersByPot[sp.pot_index] || [];
+                                const updated = e.target.checked
+                                  ? [...current, pid]
+                                  : current.filter((id) => id !== pid);
+                                setWinnersByPot({ ...winnersByPot, [sp.pot_index]: updated });
+                              }}
+                            />
+                            <span>{p?.nickname || "Player"}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-3 mt-1">
+            {game.digital_cards && (
+              <Button onClick={autoEvaluateWinners} disabled={busy} variant="secondary" className="flex-1">
+                Auto-Evaluate
+              </Button>
+            )}
+            <Button onClick={declareWinners} disabled={busy} className="flex-1">
+              Award Winners
+            </Button>
+          </div>
         </Card>
       ) : null}
+
+      <ActionLog handActions={handActions} players={players} />
+
+      {showCounter && (
+        <ChipCounter
+          denominations={game.denominations}
+          onApply={(total) => {
+            setBuyIn(String(total));
+            setShowCounter(false);
+          }}
+          onCancel={() => setShowCounter(false)}
+        />
+      )}
     </>
   );
 }
+

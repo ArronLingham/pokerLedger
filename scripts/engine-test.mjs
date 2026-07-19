@@ -140,7 +140,10 @@ async function run() {
 
     // declare seat 1 winner
     const { data: p1 } = await sb.from("game_players").select("id").eq("game_id", gameId).eq("seat", 1).single();
-    const { error: dErr } = await sb.rpc("declare_winners", { p_hand_id: handId, p_winner_ids: [p1.id] });
+    const { error: dErr } = await sb.rpc("declare_winners", {
+      p_hand_id: handId,
+      p_winners: [{ pot_index: 0, winner_ids: [p1.id] }],
+    });
     if (dErr) throw new Error("declare_winners: " + dErr.message);
 
     const s = await stacks(gameId);
@@ -204,7 +207,10 @@ async function run() {
     assert("S4 both all-in → showdown", h.status === "awaiting_showdown", `status=${h.status}`);
 
     const { data: p2 } = await sb.from("game_players").select("id").eq("game_id", gameId).eq("seat", 2).single();
-    await sb.rpc("declare_winners", { p_hand_id: handId, p_winner_ids: [p2.id] });
+    await sb.rpc("declare_winners", {
+      p_hand_id: handId,
+      p_winners: [{ pot_index: 0, winner_ids: [p2.id] }],
+    });
 
     const s = await stacks(gameId);
     assert("S4 chips conserved (200)", total(s) === 200, JSON.stringify(s));
@@ -212,6 +218,45 @@ async function run() {
     assert("S4 loser seat1 = 0", s[1] === 0, JSON.stringify(s));
     await sb.from("games").delete().eq("id", gameId);
   }
+
+  // --- Scenario 5: Multi-way uneven all-in side pots ----------------------
+  {
+    const gameId = await createGame(hostId);
+    const ps = await addPlayers(gameId, [20, 50, 100]); // P1: 20, P2: 50, P3: 100
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    // P1 (seat1, UTG) shoves 20.
+    await act(handId, "all_in");
+    // P2 (seat2, SB) shoves 50.
+    await act(handId, "all_in");
+    // P3 (seat3, BB) calls 50 (target 50).
+    await act(handId, "call");
+
+    const h = await currentHand(gameId);
+    assert("S5 all-in → showdown", h.status === "awaiting_showdown", `status=${h.status}`);
+
+    const { data: pots } = await sb.rpc("get_side_pots", { p_hand_id: handId });
+    assert("S5 generates 2 pots", pots.length === 2, `pots=${pots.length}`);
+    assert("S5 main pot = 60", Number(pots[0].amount) === 60, `main=${pots[0].amount}`);
+    assert("S5 side pot = 60", Number(pots[1].amount) === 60, `side=${pots[1].amount}`);
+
+    // P1 (seat 1) wins Main Pot (60); P2 (seat 2) wins Side Pot (60).
+    await sb.rpc("declare_winners", {
+      p_hand_id: handId,
+      p_winners: [
+        { pot_index: 0, winner_ids: [ps[0].id] },
+        { pot_index: 1, winner_ids: [ps[1].id] },
+      ],
+    });
+
+    const s = await stacks(gameId);
+    assert("S5 chips conserved (170)", total(s) === 170, JSON.stringify(s));
+    assert("S5 P1 (Main Pot winner) = 60", s[1] === 60, JSON.stringify(s));
+    assert("S5 P2 (Side Pot winner) = 60", s[2] === 60, JSON.stringify(s));
+    assert("S5 P3 (Uncommitted stack remaining) = 50", s[3] === 50, JSON.stringify(s));
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
 
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
   process.exit(failures === 0 ? 0 : 1);
@@ -221,3 +266,4 @@ run().catch((e) => {
   console.error("\nERROR:", e.message);
   process.exit(1);
 });
+

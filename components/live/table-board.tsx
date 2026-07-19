@@ -1,49 +1,95 @@
 "use client";
 
 import { clsx } from "@/lib/clsx";
-import { formatMoney } from "@/lib/ledger";
+import { formatMoney, formatChipsString } from "@/lib/ledger";
 import { Card } from "@/components/ui";
-import type { Game, GamePlayer, Hand, HandPlayer } from "@/lib/types";
+import { PlayingCard } from "@/components/playing-card";
+import type { Game, GamePlayer, Hand, HandPlayer, SidePot } from "@/lib/types";
 
 export function TableBoard({
   game,
   players,
   hand,
   handPlayers,
+  sidePots,
   viewerPlayerId,
+  showChips,
 }: {
   game: Game;
   players: GamePlayer[];
   hand: Hand | null;
   handPlayers: HandPlayer[];
+  sidePots?: SidePot[];
   viewerPlayerId?: string;
+  showChips?: boolean;
 }) {
   const hpByPlayer = new Map(handPlayers.map((hp) => [hp.player_id, hp]));
 
   return (
     <div className="flex flex-col gap-3">
       {/* Pot / street header */}
-      <Card className="flex items-center justify-between">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-muted">Pot</div>
-          <div className="text-2xl font-semibold text-accent">
-            {formatMoney(hand?.pot ?? 0)}
-          </div>
-        </div>
-        <div className="text-right text-sm text-muted">
-          {hand ? (
-            <>
-              <div className="capitalize">{hand.street}</div>
-              <div>Hand #{hand.hand_number}</div>
-            </>
-          ) : (
-            <div>No hand in progress</div>
-          )}
+      <Card className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
           <div>
-            Blinds {formatMoney(game.small_blind)}/{formatMoney(game.big_blind)}
+            <div className="text-xs uppercase tracking-wide text-muted">Pot</div>
+            <div className="text-2xl font-semibold text-accent">
+              {showChips && game.denominations ? formatChipsString(hand?.pot ?? 0, game.denominations) : formatMoney(hand?.pot ?? 0)}
+            </div>
+          </div>
+          <div className="text-right text-sm text-muted">
+            {hand ? (
+              <>
+                <div className="capitalize">{hand.street}</div>
+                <div>Hand #{hand.hand_number}</div>
+              </>
+            ) : (
+              <div>No hand in progress</div>
+            )}
+            <div>
+              Blinds {formatMoney(game.small_blind)}/{formatMoney(game.big_blind)}
+            </div>
           </div>
         </div>
+
+        {/* Side pots breakdown */}
+        {sidePots && sidePots.length > 1 ? (
+          <div className="mt-1 border-t border-border pt-2 text-xs">
+            <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted">
+              Pot breakdown ({sidePots.length} pots)
+            </div>
+            <div className="flex flex-col gap-1">
+              {sidePots.map((sp) => {
+                const names = sp.eligible_player_ids
+                  .map((id) => players.find((p) => p.id === id)?.nickname ?? "Player")
+                  .join(", ");
+                return (
+                  <div key={sp.pot_index} className="flex justify-between items-center text-muted">
+                    <span>
+                      {sp.pot_index === 0 ? "Main Pot" : `Side Pot ${sp.pot_index}`}:{" "}
+                      <span className="font-semibold text-foreground">
+                        {showChips && game.denominations ? formatChipsString(sp.amount, game.denominations) : formatMoney(sp.amount)}
+                      </span>
+                    </span>
+                    <span className="truncate max-w-[140px] text-[11px] text-muted/80">
+                      {names}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Community Cards (if digital mode) */}
+        {game.digital_cards && hand && hand.board && hand.board.length > 0 ? (
+          <div className="mt-2 flex justify-center gap-2 border-t border-border pt-3">
+            {hand.board.map((card, i) => (
+              <PlayingCard key={i} card={card} className="w-12 sm:w-16" />
+            ))}
+          </div>
+        ) : null}
       </Card>
+
 
       {/* Seats */}
       <div className="flex flex-col gap-2">
@@ -91,17 +137,26 @@ export function TableBoard({
                   <div className="text-xs text-muted">
                     bet{" "}
                     <span className="text-foreground">
-                      {formatMoney(hp.committed_street)}
+                      {showChips && game.denominations ? formatChipsString(hp.committed_street, game.denominations) : formatMoney(hp.committed_street)}
                     </span>
                   </div>
                 ) : null}
                 <div>
                   <div className="text-xs text-muted">stack</div>
                   <div className="font-mono font-semibold">
-                    {formatMoney(p.stack)}
+                    {showChips && game.denominations ? formatChipsString(p.stack, game.denominations) : formatMoney(p.stack)}
                   </div>
                 </div>
               </div>
+
+              {/* Showdown: reveal hole cards */}
+              {game.digital_cards && hand?.status === "awaiting_showdown" && hp?.hole_cards ? (
+                <div className="ml-4 flex gap-1 border-l border-border pl-4">
+                  {hp.hole_cards.map((card, i) => (
+                    <PlayingCard key={i} card={card} className="w-10 sm:w-12" />
+                  ))}
+                </div>
+              ) : null}
             </div>
           );
         })}

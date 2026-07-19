@@ -30,6 +30,7 @@ export type Game = {
   big_blind: number;
   dealer_seat: number | null;
   denominations: ChipDenomination[] | null;
+  digital_cards: boolean;
   created_at: string;
 };
 
@@ -63,6 +64,8 @@ export type Hand = {
   current_bet: number;
   last_raise: number;
   pot: number;
+  deck: string[];
+  board: string[];
   created_at: string;
 };
 
@@ -77,6 +80,7 @@ export type HandPlayer = {
   committed_street: number;
   status: HandPlayerStatus;
   has_acted: boolean;
+  hole_cards: string[] | null;
 };
 
 export type GameResult = {
@@ -96,3 +100,20 @@ export type Settlement = {
   note: string;
   created_at: string;
 };
+
+export type HandAction = {
+  id: string;
+  hand_id: string;
+  player_id: string | null;
+  street: HandStreet;
+  action: string;
+  amount: number;
+  created_at: string;
+};
+
+export type SidePot = {
+  pot_index: number;
+  amount: number;
+  eligible_player_ids: string[];
+};
+

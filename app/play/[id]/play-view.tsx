@@ -6,6 +6,8 @@ import { Card } from "@/components/ui";
 import { useLiveGame } from "@/components/live/use-live-game";
 import { TableBoard } from "@/components/live/table-board";
 import { ActionBar, type ActionKind } from "@/components/live/action-bar";
+import { ActionLog } from "@/components/live/action-log";
+import { PlayingCard } from "@/components/playing-card";
 import type { Game, GamePlayer } from "@/lib/types";
 
 function Status({
@@ -50,10 +52,11 @@ export function PlayView({
   player: GamePlayer;
 }) {
   const supabase = createClient();
-  const { game, players, hand, handPlayers, loading } = useLiveGame(
-    initialGame.id,
-  );
+  const { game, players, hand, handPlayers, handActions, sidePots, loading } =
+    useLiveGame(initialGame.id);
   const [busy, setBusy] = useState(false);
+  const [showChips, setShowChips] = useState(false);
+  const [isPeeking, setIsPeeking] = useState(false);
 
   const nickname = player.nickname || "Player";
   const gameName = (game ?? initialGame).name;
@@ -97,8 +100,18 @@ export function PlayView({
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6 pb-24">
-      <div className="mb-3 text-center text-sm text-muted">
-        Playing as <span className="text-foreground">{nickname}</span>
+      <div className="mb-3 flex items-center justify-between text-sm text-muted">
+        <div>
+          Playing as <span className="text-foreground">{nickname}</span>
+        </div>
+        {game.denominations && game.denominations.length > 0 && (
+          <button
+            className="text-accent hover:underline text-xs"
+            onClick={() => setShowChips(!showChips)}
+          >
+            {showChips ? "Show Value" : "Show Chips"}
+          </button>
+        )}
       </div>
 
       <TableBoard
@@ -106,7 +119,9 @@ export function PlayView({
         players={players}
         hand={hand}
         handPlayers={handPlayers}
+        sidePots={sidePots}
         viewerPlayerId={player.id}
+        showChips={showChips}
       />
 
       {!hand || hand.status === "complete" ? (
@@ -131,6 +146,8 @@ export function PlayView({
             pot={hand.pot}
             busy={busy}
             onAction={act}
+            showChips={showChips}
+            denominations={game.denominations}
           />
         </div>
       ) : myHp && myHp.status !== "folded" ? (
@@ -148,6 +165,31 @@ export function PlayView({
             : "Sitting out this hand."}
         </p>
       )}
+
+      <ActionLog handActions={handActions} players={players} />
+
+      {/* Digital Hole Cards */}
+      {game.digital_cards && myHp?.hole_cards && myHp.hole_cards.length > 0 ? (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
+          <button
+            onPointerDown={() => setIsPeeking(true)}
+            onPointerUp={() => setIsPeeking(false)}
+            onPointerLeave={() => setIsPeeking(false)}
+            onContextMenu={(e) => e.preventDefault()}
+            className="flex gap-2 p-2 bg-surface/80 backdrop-blur-md rounded-2xl border border-border shadow-xl transition-transform active:scale-95 touch-none select-none"
+          >
+            {myHp.hole_cards.map((card, i) => (
+              <PlayingCard key={i} card={card} hidden={!isPeeking} className="w-20 shadow-sm" />
+            ))}
+          </button>
+          {!isPeeking && (
+            <div className="mt-1.5 text-[10px] font-medium uppercase tracking-widest text-muted/80 pointer-events-none">
+              Hold to peek
+            </div>
+          )}
+        </div>
+      ) : null}
     </main>
   );
 }
+
