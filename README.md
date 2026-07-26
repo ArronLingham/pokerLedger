@@ -55,6 +55,14 @@ order**:
 4. [`supabase/migrations/0004_betting_engine.sql`](supabase/migrations/0004_betting_engine.sql)
    — the betting engine RPCs (`start_hand`, `player_action`, `declare_winners`).
 5. [`supabase/migrations/0005_side_pots.sql`](supabase/migrations/0005_side_pots.sql)
+   — multi-way all-in side pots, uncalled-bet refunds, per-pot winners.
+6. [`supabase/migrations/0006_digital_cards.sql`](supabase/migrations/0006_digital_cards.sql)
+   — digital dealer: deck, community board, and hole cards.
+7. [`supabase/migrations/0007_card_privacy.sql`](supabase/migrations/0007_card_privacy.sql)
+   — **required for digital cards.** Moves hole cards and the undealt deck into
+   private tables so players can't read opponents' cards (or the upcoming turn
+   and river) from the network tab. Cards are served only via scoped RPCs.
+5. [`supabase/migrations/0005_side_pots.sql`](supabase/migrations/0005_side_pots.sql)
    — side pot calculation and uncalled bet refunds.
 6. [`supabase/migrations/0006_digital_cards.sql`](supabase/migrations/0006_digital_cards.sql)
    — digital cards mode (deck, board, hole cards) and automatic hand evaluation.
