@@ -43,29 +43,56 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxx
 
 ### 3. Apply the database schema
 
-In the Supabase dashboard → **SQL Editor**, paste and run **each migration in
-order**:
+Migrations are managed with the **Supabase CLI** (installed as a dev dependency)
+— no copy-pasting SQL into the dashboard.
 
-1. [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) —
-   tables, Row-Level Security, and the signup trigger.
-2. [`supabase/migrations/0002_live_games.sql`](supabase/migrations/0002_live_games.sql)
-   — live games: join codes, the lobby roster, join RPCs, and realtime.
-3. [`supabase/migrations/0003_chip_tracker.sql`](supabase/migrations/0003_chip_tracker.sql)
-   — chip tracker: stacks/blinds/button, `hands` + `hand_players`, realtime.
-4. [`supabase/migrations/0004_betting_engine.sql`](supabase/migrations/0004_betting_engine.sql)
-   — the betting engine RPCs (`start_hand`, `player_action`, `declare_winners`).
-5. [`supabase/migrations/0005_side_pots.sql`](supabase/migrations/0005_side_pots.sql)
-   — multi-way all-in side pots, uncalled-bet refunds, per-pot winners.
-6. [`supabase/migrations/0006_digital_cards.sql`](supabase/migrations/0006_digital_cards.sql)
-   — digital dealer: deck, community board, and hole cards.
-7. [`supabase/migrations/0007_card_privacy.sql`](supabase/migrations/0007_card_privacy.sql)
-   — **required for digital cards.** Moves hole cards and the undealt deck into
-   private tables so players can't read opponents' cards (or the upcoming turn
-   and river) from the network tab. Cards are served only via scoped RPCs.
-5. [`supabase/migrations/0005_side_pots.sql`](supabase/migrations/0005_side_pots.sql)
-   — side pot calculation and uncalled bet refunds.
-6. [`supabase/migrations/0006_digital_cards.sql`](supabase/migrations/0006_digital_cards.sql)
-   — digital cards mode (deck, board, hole cards) and automatic hand evaluation.
+**One-time setup** (per machine):
+
+```bash
+npx supabase login
+```
+
+```bash
+npx supabase link --project-ref fnvdzrnktwtyogjxmjfl
+```
+
+`link` prompts for your **database password** (Supabase dashboard → Project
+Settings → Database). The CLI stores it in your OS keychain; it never goes in
+the repo.
+
+**Apply any pending migrations:**
+
+```bash
+npm run db:push
+```
+
+**Check what's applied vs pending:**
+
+```bash
+npm run db:status
+```
+
+**Create a new migration** (writes a timestamped file in `supabase/migrations/`):
+
+```bash
+npm run db:new -- my_change_name
+```
+
+> If you're setting up a database that already had these migrations applied by
+> hand, mark them as applied instead of re-running them:
+> `npx supabase migration repair --status applied 0001 0002 0003 0004 0005 0006 0007`
+
+### Migration history
+
+| File | What it adds |
+|---|---|
+| `0001_init.sql` | Core tables, RLS, signup trigger |
+| `0002_live_games.sql` | Join codes, lobby roster, join RPCs, realtime |
+| `0003_chip_tracker.sql` | Stacks/blinds/button, `hands` + `hand_players` |
+| `0004_betting_engine.sql` | Betting RPCs: `start_hand`, `player_action`, `declare_winners` |
+| `0005_side_pots.sql` | Multi-way all-in side pots, uncalled-bet refunds, per-pot winners |
+| `0006_digital_cards.sql` | Digital dealer: deck, community board, hole cards |
+| `0007_card_privacy.sql` | **Required for digital cards.** Moves hole cards + undealt deck into private tables so players can't read opponents' cards (or the upcoming turn/river) from the network tab; cards served only via scoped RPCs |
 
 ### 4. Auth settings
 
