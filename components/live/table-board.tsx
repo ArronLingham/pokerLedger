@@ -4,7 +4,14 @@ import { clsx } from "@/lib/clsx";
 import { formatMoney, formatChipsString } from "@/lib/ledger";
 import { Card } from "@/components/ui";
 import { PlayingCard } from "@/components/playing-card";
-import type { Game, GamePlayer, Hand, HandPlayer, SidePot } from "@/lib/types";
+import type {
+  Game,
+  GamePlayer,
+  Hand,
+  HandPlayer,
+  ShowdownCards,
+  SidePot,
+} from "@/lib/types";
 
 export function TableBoard({
   game,
@@ -14,6 +21,7 @@ export function TableBoard({
   sidePots,
   viewerPlayerId,
   showChips,
+  showdownCards,
 }: {
   game: Game;
   players: GamePlayer[];
@@ -22,8 +30,13 @@ export function TableBoard({
   sidePots?: SidePot[];
   viewerPlayerId?: string;
   showChips?: boolean;
+  /** Only supplied at showdown, and only for hands that were contested. */
+  showdownCards?: ShowdownCards[];
 }) {
   const hpByPlayer = new Map(handPlayers.map((hp) => [hp.player_id, hp]));
+  const shownByPlayer = new Map(
+    (showdownCards ?? []).map((s) => [s.player_id, s.cards]),
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -149,10 +162,10 @@ export function TableBoard({
                 </div>
               </div>
 
-              {/* Showdown: reveal hole cards */}
-              {game.digital_cards && hand?.status === "awaiting_showdown" && hp?.hole_cards ? (
+              {/* Showdown: reveal only hands that reached it (mucks stay hidden) */}
+              {game.digital_cards && shownByPlayer.get(p.id)?.length ? (
                 <div className="ml-4 flex gap-1 border-l border-border pl-4">
-                  {hp.hole_cards.map((card, i) => (
+                  {shownByPlayer.get(p.id)!.map((card, i) => (
                     <PlayingCard key={i} card={card} className="w-10 sm:w-12" />
                   ))}
                 </div>

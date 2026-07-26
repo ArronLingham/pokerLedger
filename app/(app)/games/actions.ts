@@ -251,23 +251,33 @@ export async function evaluateShowdown(
 
   const board = hand.board || [];
 
-  const { data: players, error: playersErr } = await supabase
-    .from("hand_players")
-    .select("*")
-    .eq("hand_id", handId)
-    .in("status", ["active", "all_in"]);
+  // Hole cards live in a private table; only the host can read them, and only
+  // via this SECURITY DEFINER RPC.
+  const { data: cardRows, error: cardsErr } = await supabase.rpc(
+    "get_hand_cards_for_eval",
+    { p_hand_id: handId },
+  );
 
-  if (playersErr || !players) return { error: "Could not fetch players" };
+  if (cardsErr || !cardRows) return { error: "Could not fetch cards" };
+
+  const cardsByPlayer = new Map<string, string[]>(
+    (cardRows as { player_id: string; cards: string[] }[]).map((r) => [
+      r.player_id,
+      r.cards,
+    ]),
+  );
 
   const results = [];
   for (const sp of potsToEvaluate) {
-    const eligible = players.filter(p => sp.eligible_player_ids.includes(p.player_id));
+    const eligible = sp.eligible_player_ids.filter((id) =>
+      cardsByPlayer.has(id),
+    );
     if (eligible.length === 0) continue;
 
-    const playerHands = eligible.map(p => {
-      const cards = [...(p.hole_cards || []), ...board];
+    const playerHands = eligible.map((playerId) => {
+      const cards = [...(cardsByPlayer.get(playerId) ?? []), ...board];
       const handEval = PokerHand.solve(cards);
-      return { playerId: p.player_id, handEval };
+      return { playerId, handEval };
     });
 
     const winningHands = PokerHand.winners(playerHands.map(p => p.handEval));

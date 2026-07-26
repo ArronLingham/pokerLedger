@@ -52,8 +52,17 @@ export function PlayView({
   player: GamePlayer;
 }) {
   const supabase = createClient();
-  const { game, players, hand, handPlayers, handActions, sidePots, loading } =
-    useLiveGame(initialGame.id);
+  const {
+    game,
+    players,
+    hand,
+    handPlayers,
+    handActions,
+    sidePots,
+    myHoleCards,
+    showdownCards,
+    loading,
+  } = useLiveGame(initialGame.id);
   const [busy, setBusy] = useState(false);
   const [showChips, setShowChips] = useState(false);
   const [isPeeking, setIsPeeking] = useState(false);
@@ -122,6 +131,7 @@ export function PlayView({
         sidePots={sidePots}
         viewerPlayerId={player.id}
         showChips={showChips}
+        showdownCards={showdownCards}
       />
 
       {!hand || hand.status === "complete" ? (
@@ -169,7 +179,7 @@ export function PlayView({
       <ActionLog handActions={handActions} players={players} />
 
       {/* Digital Hole Cards */}
-      {game.digital_cards && myHp?.hole_cards && myHp.hole_cards.length > 0 ? (
+      {game.digital_cards && myHoleCards.length > 0 ? (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
           <button
             onPointerDown={() => setIsPeeking(true)}
@@ -178,7 +188,7 @@ export function PlayView({
             onContextMenu={(e) => e.preventDefault()}
             className="flex gap-2 p-2 bg-surface/80 backdrop-blur-md rounded-2xl border border-border shadow-xl transition-transform active:scale-95 touch-none select-none"
           >
-            {myHp.hole_cards.map((card, i) => (
+            {myHoleCards.map((card, i) => (
               <PlayingCard key={i} card={card} hidden={!isPeeking} className="w-20 shadow-sm" />
             ))}
           </button>

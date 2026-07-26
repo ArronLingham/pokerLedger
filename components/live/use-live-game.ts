@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import type { Game, GamePlayer, Hand, HandAction, HandPlayer, SidePot } from "@/lib/types";
+import type {
+  Game,
+  GamePlayer,
+  Hand,
+  HandAction,
+  HandPlayer,
+  ShowdownCards,
+  SidePot,
+} from "@/lib/types";
 
 export type LiveSnapshot = {
   game: Game | null;
@@ -11,6 +19,10 @@ export type LiveSnapshot = {
   handPlayers: HandPlayer[];
   handActions: HandAction[];
   sidePots: SidePot[];
+  /** The signed-in player's own hole cards (never anyone else's). */
+  myHoleCards: string[];
+  /** Populated only at showdown, and only for contested hands. */
+  showdownCards: ShowdownCards[];
   loading: boolean;
 };
 
@@ -31,6 +43,8 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
   const [handPlayers, setHandPlayers] = useState<HandPlayer[]>([]);
   const [handActions, setHandActions] = useState<HandAction[]>([]);
   const [sidePots, setSidePots] = useState<SidePot[]>([]);
+  const [myHoleCards, setMyHoleCards] = useState<string[]>([]);
+  const [showdownCards, setShowdownCards] = useState<ShowdownCards[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -57,27 +71,36 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
     setHand((h as Hand) ?? null);
 
     if (h?.id) {
-      const [{ data: hp }, { data: ha }, { data: sp }] = await Promise.all([
-        supabase
-          .from("hand_players")
-          .select("*")
-          .eq("hand_id", h.id)
-          .order("seat"),
-        supabase
-          .from("hand_actions")
-          .select("*")
-          .eq("hand_id", h.id)
-          .order("created_at", { ascending: true }),
-        supabase.rpc("get_side_pots", { p_hand_id: h.id }),
-      ]);
+      // Cards are never selected from tables — hole cards and the undealt deck
+      // are private. They come back only through these scoped RPCs.
+      const [{ data: hp }, { data: ha }, { data: sp }, { data: mine }, { data: shown }] =
+        await Promise.all([
+          supabase
+            .from("hand_players")
+            .select("*")
+            .eq("hand_id", h.id)
+            .order("seat"),
+          supabase
+            .from("hand_actions")
+            .select("*")
+            .eq("hand_id", h.id)
+            .order("created_at", { ascending: true }),
+          supabase.rpc("get_side_pots", { p_hand_id: h.id }),
+          supabase.rpc("get_my_hole_cards", { p_hand_id: h.id }),
+          supabase.rpc("get_showdown_cards", { p_hand_id: h.id }),
+        ]);
 
       setHandPlayers((hp as HandPlayer[]) ?? []);
       setHandActions((ha as HandAction[]) ?? []);
       setSidePots((sp as SidePot[]) ?? []);
+      setMyHoleCards((mine as string[]) ?? []);
+      setShowdownCards((shown as ShowdownCards[]) ?? []);
     } else {
       setHandPlayers([]);
       setHandActions([]);
       setSidePots([]);
+      setMyHoleCards([]);
+      setShowdownCards([]);
     }
     setLoading(false);
   }, [supabase, gameId]);
@@ -99,6 +122,17 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
     };
   }, [supabase, gameId, refresh]);
 
-  return { game, players, hand, handPlayers, handActions, sidePots, loading, refresh };
+  return {
+    game,
+    players,
+    hand,
+    handPlayers,
+    handActions,
+    sidePots,
+    myHoleCards,
+    showdownCards,
+    loading,
+    refresh,
+  };
 }
 

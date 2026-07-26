@@ -16,8 +16,17 @@ import { ChipCounter } from "@/components/chip-counter";
 export function HostTable({ gameId }: { gameId: string }) {
   const router = useRouter();
   const supabase = createClient();
-  const { game, players, hand, handPlayers, handActions, sidePots, loading, refresh } =
-    useLiveGame(gameId);
+  const {
+    game,
+    players,
+    hand,
+    handPlayers,
+    handActions,
+    sidePots,
+    showdownCards,
+    loading,
+    refresh,
+  } = useLiveGame(gameId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [buyIn, setBuyIn] = useState("100");
@@ -216,6 +225,7 @@ export function HostTable({ gameId }: { gameId: string }) {
         handPlayers={handPlayers}
         sidePots={sidePots}
         showChips={showChips}
+        showdownCards={showdownCards}
       />
 
       {error ? (

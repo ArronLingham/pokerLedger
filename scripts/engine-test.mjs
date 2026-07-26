@@ -258,6 +258,75 @@ async function run() {
   }
 
 
+  // --- Scenario 6: card privacy (digital cards must never leak) -----------
+  {
+    const gameId = await createGame(hostId);
+    await sb.from("games").update({ digital_cards: true }).eq("id", gameId);
+    await addPlayers(gameId, [100, 100, 100]);
+    const { data: handId, error: shErr } = await sb.rpc("start_hand", { p_game_id: gameId });
+    if (shErr) throw new Error("S6 start_hand: " + shErr.message);
+
+    // The leaky columns must be gone from the public tables.
+    const { error: deckColErr } = await sb.from("hands").select("deck").eq("id", handId).limit(1);
+    assert("S6 hands.deck column is gone", !!deckColErr, "column still selectable");
+
+    const { error: holeColErr } = await sb
+      .from("hand_players").select("hole_cards").eq("hand_id", handId).limit(1);
+    assert("S6 hand_players.hole_cards column is gone", !!holeColErr, "column still selectable");
+
+    // The private tables must be unreachable over the REST API.
+    const { data: deckRows } = await sb.from("hand_deck").select("*").eq("hand_id", handId);
+    assert("S6 hand_deck not readable", !deckRows || deckRows.length === 0,
+      `leaked ${deckRows?.length} deck rows`);
+
+    const { data: holeRows } = await sb
+      .from("hand_hole_cards").select("*").eq("hand_id", handId);
+    assert("S6 hand_hole_cards not readable", !holeRows || holeRows.length === 0,
+      `leaked ${holeRows?.length} hole-card rows`);
+
+    // Nothing is revealed before showdown.
+    const { data: preShow } = await sb.rpc("get_showdown_cards", { p_hand_id: handId });
+    assert("S6 no showdown reveal mid-hand", !preShow || preShow.length === 0,
+      `revealed ${preShow?.length} during betting`);
+
+    // Board is dealt correctly and stays public.
+    await playPassive(gameId, handId);
+    const hEnd = await currentHand(gameId);
+    assert("S6 reaches showdown", hEnd.status === "awaiting_showdown", `status=${hEnd.status}`);
+    assert("S6 board has 5 cards", (hEnd.board || []).length === 5, `board=${JSON.stringify(hEnd.board)}`);
+    assert("S6 board cards unique", new Set(hEnd.board).size === 5, JSON.stringify(hEnd.board));
+
+    // At showdown, contested hands are revealed (3 players all reached it).
+    const { data: shown } = await sb.rpc("get_showdown_cards", { p_hand_id: handId });
+    assert("S6 showdown reveals 3 hands", shown?.length === 3, `got ${shown?.length}`);
+    const revealed = (shown ?? []).flatMap((s) => s.cards);
+    assert("S6 revealed cards are 2 each", revealed.length === 6, `${revealed.length} cards`);
+    assert("S6 no card dealt twice", new Set([...revealed, ...hEnd.board]).size === 11,
+      "duplicate card between hole cards and board");
+
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
+  // --- Scenario 7: folded hands stay mucked at showdown -------------------
+  {
+    const gameId = await createGame(hostId);
+    await sb.from("games").update({ digital_cards: true }).eq("id", gameId);
+    await addPlayers(gameId, [100, 100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    // UTG folds; the other two see it through to showdown.
+    await act(handId, "fold");
+    await playPassive(gameId, handId);
+
+    const h = await currentHand(gameId);
+    assert("S7 reaches showdown", h.status === "awaiting_showdown", `status=${h.status}`);
+
+    const { data: shown } = await sb.rpc("get_showdown_cards", { p_hand_id: handId });
+    assert("S7 only 2 hands revealed (folder mucked)", shown?.length === 2, `got ${shown?.length}`);
+
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
   process.exit(failures === 0 ? 0 : 1);
 }

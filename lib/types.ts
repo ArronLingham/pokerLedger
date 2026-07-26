@@ -64,7 +64,7 @@ export type Hand = {
   current_bet: number;
   last_raise: number;
   pot: number;
-  deck: string[];
+  /** Community cards. The undealt deck is private (server-side only). */
   board: string[];
   created_at: string;
 };
@@ -80,8 +80,10 @@ export type HandPlayer = {
   committed_street: number;
   status: HandPlayerStatus;
   has_acted: boolean;
-  hole_cards: string[] | null;
 };
+
+/** Cards revealed at showdown, keyed by game_player id. */
+export type ShowdownCards = { player_id: string; cards: string[] };
 
 export type GameResult = {
   id: string;
