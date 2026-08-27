@@ -127,6 +127,14 @@ async function setTurnSeconds(gameId, secs) {
   if (error) throw new Error("setTurnSeconds: " + error.message);
 }
 
+// Mid-hand, committed chips live in the pot rather than in stacks, so
+// conservation has to count both.
+async function stacksPlusPot(gameId) {
+  const s = await stacks(gameId);
+  const h = await currentHand(gameId);
+  return total(s) + Number(h?.pot ?? 0);
+}
+
 async function handPlayerBySeat(handId, seat) {
   const { data } = await sb
     .from("hand_players").select("*").eq("hand_id", handId).eq("seat", seat).single();
@@ -374,8 +382,9 @@ async function run() {
     assert("S8 action logged as auto/timed-out", !!timedOut && timedOut.action === "fold",
       JSON.stringify(acts));
 
-    const s = await stacks(gameId);
-    assert("S8 chips conserved (300)", total(s) === 300, JSON.stringify(s));
+    // The hand is still live (2 players left), so the blinds sit in the pot.
+    const t8 = await stacksPlusPot(gameId);
+    assert("S8 chips conserved incl. pot (300)", t8 === 300, `total=${t8}`);
     await sb.from("games").delete().eq("id", gameId);
   }
 
@@ -406,8 +415,8 @@ async function run() {
       `status=${hpNow.status}`);
     assert("S9 player marked as acted", hpNow.has_acted === true);
 
-    const s = await stacks(gameId);
-    assert("S9 chips conserved (300)", total(s) === 300, JSON.stringify(s));
+    const t9 = await stacksPlusPot(gameId);
+    assert("S9 chips conserved incl. pot (300)", t9 === 300, `total=${t9}`);
     await sb.from("games").delete().eq("id", gameId);
   }
 

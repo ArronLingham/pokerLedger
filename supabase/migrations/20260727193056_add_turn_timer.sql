@@ -96,6 +96,7 @@ declare
   v_stack   numeric;
   v_profile uuid;
   v_is_host boolean;
+  v_clock_expired boolean;
   v_expired boolean;
   v_tocall  numeric;
   v_target  numeric;   -- target street commitment (for bet/raise/all_in)
@@ -120,10 +121,13 @@ begin
   select profile_id, stack into v_profile, v_stack
     from public.game_players where id = v_hp.player_id;
 
+  v_clock_expired := v_hand.turn_deadline is not null
+                 and now() > v_hand.turn_deadline;
+
   -- The clock has run out AND this is a non-committal action AND the caller is
   -- actually in this game: anyone at the table may move the game along.
-  v_expired := v_hand.turn_deadline is not null
-           and now() > v_hand.turn_deadline
+  -- (The host doesn't need this branch — v_is_host already lets them act.)
+  v_expired := v_clock_expired
            and p_action in ('fold', 'check')
            and public.is_game_participant(v_hand.game_id);
 
@@ -201,11 +205,14 @@ begin
   end if;
 
   -- "auto" means the clock ran out and somebody OTHER than the player moved the
-  -- game along; a player folding just after their own clock expired is still a
-  -- deliberate fold.
+  -- game along (a player folding just after their own clock expired is still a
+  -- deliberate fold). Keyed off v_clock_expired, not v_expired, so a
+  -- host-triggered timeout is labelled too — the host is not a seated player,
+  -- so is_game_participant() is false for them.
   insert into public.hand_actions (hand_id, player_id, street, action, amount, auto)
   values (p_hand_id, v_hp.player_id, v_hand.street, p_action, coalesce(v_add, 0),
-          coalesce(v_expired, false)
+          coalesce(v_clock_expired, false)
+            and p_action in ('fold', 'check')
             and (v_profile is null or v_profile <> auth.uid()));
 
   -- Refresh pot from contributions.
