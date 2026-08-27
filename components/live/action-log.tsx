@@ -71,6 +71,11 @@ export function ActionLog({
                     {formatMoney(act.amount)}
                   </span>
                 ) : null}
+                {act.auto ? (
+                  <span className="rounded bg-negative/15 px-1 font-sans text-[10px] font-medium text-negative">
+                    timed out
+                  </span>
+                ) : null}
               </div>
               <span className="text-[10px] text-muted/70 font-sans">
                 {new Date(act.created_at).toLocaleTimeString([], {

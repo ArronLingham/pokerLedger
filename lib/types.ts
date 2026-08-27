@@ -31,6 +31,8 @@ export type Game = {
   dealer_seat: number | null;
   denominations: ChipDenomination[] | null;
   digital_cards: boolean;
+  /** Seconds each player gets to act. 0 = timer disabled. */
+  turn_seconds: number;
   created_at: string;
 };
 
@@ -66,6 +68,8 @@ export type Hand = {
   pot: number;
   /** Community cards. The undealt deck is private (server-side only). */
   board: string[];
+  /** When the current player's clock runs out. Null when no timer is running. */
+  turn_deadline: string | null;
   created_at: string;
 };
 
@@ -110,6 +114,8 @@ export type HandAction = {
   street: HandStreet;
   action: string;
   amount: number;
+  /** True when the clock ran out and the action was forced. */
+  auto: boolean;
   created_at: string;
 };
 

@@ -4,6 +4,7 @@ import { clsx } from "@/lib/clsx";
 import { formatMoney, formatChipsString } from "@/lib/ledger";
 import { Card } from "@/components/ui";
 import { PlayingCard } from "@/components/playing-card";
+import { TurnTimer } from "@/components/live/turn-timer";
 import type {
   Game,
   GamePlayer,
@@ -22,6 +23,7 @@ export function TableBoard({
   viewerPlayerId,
   showChips,
   showdownCards,
+  isHost,
 }: {
   game: Game;
   players: GamePlayer[];
@@ -32,6 +34,8 @@ export function TableBoard({
   showChips?: boolean;
   /** Only supplied at showdown, and only for hands that were contested. */
   showdownCards?: ShowdownCards[];
+  /** The host's client nudges the turn clock sooner than players' do. */
+  isHost?: boolean;
 }) {
   const hpByPlayer = new Map(handPlayers.map((hp) => [hp.player_id, hp]));
   const shownByPlayer = new Map(
@@ -142,6 +146,15 @@ export function TableBoard({
                 ) : null}
                 {folded ? (
                   <span className="text-[10px] uppercase text-muted">folded</span>
+                ) : null}
+                {isTurn && hand && hand.status === "betting" ? (
+                  <TurnTimer
+                    handId={hand.id}
+                    deadline={hand.turn_deadline}
+                    totalSeconds={game.turn_seconds}
+                    isHost={!!isHost}
+                    className="ml-1"
+                  />
                 ) : null}
               </div>
 

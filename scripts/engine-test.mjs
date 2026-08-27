@@ -120,6 +120,19 @@ function total(s) {
   return Object.values(s).reduce((a, b) => a + b, 0);
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function setTurnSeconds(gameId, secs) {
+  const { error } = await sb.from("games").update({ turn_seconds: secs }).eq("id", gameId);
+  if (error) throw new Error("setTurnSeconds: " + error.message);
+}
+
+async function handPlayerBySeat(handId, seat) {
+  const { data } = await sb
+    .from("hand_players").select("*").eq("hand_id", handId).eq("seat", seat).single();
+  return data;
+}
+
 async function run() {
   const hostId = await signInHost();
 
@@ -324,6 +337,98 @@ async function run() {
     const { data: shown } = await sb.rpc("get_showdown_cards", { p_hand_id: handId });
     assert("S7 only 2 hands revealed (folder mucked)", shown?.length === 2, `got ${shown?.length}`);
 
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
+  // --- Scenario 8: turn timer — auto-FOLD when facing a bet ---------------
+  {
+    const gameId = await createGame(hostId);
+    await setTurnSeconds(gameId, 1);
+    await addPlayers(gameId, [100, 100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    const h0 = await currentHand(gameId);
+    assert("S8 deadline is set when timer on", !!h0.turn_deadline, `deadline=${h0.turn_deadline}`);
+
+    // Nobody can force a fold before the clock runs out.
+    const { data: early } = await sb.rpc("expire_turn", { p_hand_id: handId });
+    assert("S8 expire_turn no-ops before deadline", early === false, `returned ${early}`);
+    const hEarly = await currentHand(gameId);
+    assert("S8 turn unchanged before deadline", hEarly.current_turn === h0.current_turn);
+
+    // UTG faces the big blind, so timing out must FOLD (not check).
+    await sleep(2100);
+    const { data: fired } = await sb.rpc("expire_turn", { p_hand_id: handId });
+    assert("S8 expire_turn acts after deadline", fired === true, `returned ${fired}`);
+
+    const hp1 = await handPlayerBySeat(handId, 1);
+    assert("S8 timed-out player folded", hp1.status === "folded", `status=${hp1.status}`);
+
+    const hAfter = await currentHand(gameId);
+    assert("S8 turn advanced past folder", hAfter.current_turn !== h0.current_turn);
+    assert("S8 fresh deadline for next player", !!hAfter.turn_deadline);
+
+    const { data: acts } = await sb
+      .from("hand_actions").select("action, auto").eq("hand_id", handId).order("created_at");
+    const timedOut = acts.find((a) => a.auto === true);
+    assert("S8 action logged as auto/timed-out", !!timedOut && timedOut.action === "fold",
+      JSON.stringify(acts));
+
+    const s = await stacks(gameId);
+    assert("S8 chips conserved (300)", total(s) === 300, JSON.stringify(s));
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
+  // --- Scenario 9: turn timer — auto-CHECK when checking is free ----------
+  {
+    const gameId = await createGame(hostId);
+    await setTurnSeconds(gameId, 1);
+    await addPlayers(gameId, [100, 100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    // Close the preflop round: UTG calls, SB calls, BB checks -> flop.
+    await act(handId, "call");
+    await act(handId, "call");
+    await act(handId, "check");
+
+    const hFlop = await currentHand(gameId);
+    assert("S9 advanced to flop", hFlop.street === "flop", `street=${hFlop.street}`);
+    assert("S9 no bet to call on flop", Number(hFlop.current_bet) === 0);
+
+    const turnPid = hFlop.current_turn;
+    await sleep(2100);
+    const { data: fired } = await sb.rpc("expire_turn", { p_hand_id: handId });
+    assert("S9 expire_turn acts", fired === true, `returned ${fired}`);
+
+    const { data: hpNow } = await sb
+      .from("hand_players").select("*").eq("hand_id", handId).eq("player_id", turnPid).single();
+    assert("S9 timed-out player CHECKED (still active)", hpNow.status === "active",
+      `status=${hpNow.status}`);
+    assert("S9 player marked as acted", hpNow.has_acted === true);
+
+    const s = await stacks(gameId);
+    assert("S9 chips conserved (300)", total(s) === 300, JSON.stringify(s));
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
+  // --- Scenario 10: timer off (default) leaves behaviour unchanged --------
+  {
+    const gameId = await createGame(hostId);
+    await addPlayers(gameId, [100, 100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    const h = await currentHand(gameId);
+    assert("S10 no deadline when timer off", h.turn_deadline === null, `deadline=${h.turn_deadline}`);
+
+    const { data: fired } = await sb.rpc("expire_turn", { p_hand_id: handId });
+    assert("S10 expire_turn no-ops with timer off", fired === false, `returned ${fired}`);
+
+    await sleep(1200);
+    const { data: fired2 } = await sb.rpc("expire_turn", { p_hand_id: handId });
+    assert("S10 still no-ops after waiting", fired2 === false, `returned ${fired2}`);
+
+    const h2 = await currentHand(gameId);
+    assert("S10 turn never moved on its own", h2.current_turn === h.current_turn);
     await sb.from("games").delete().eq("id", gameId);
   }
 

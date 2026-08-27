@@ -93,6 +93,7 @@ npm run db:new -- my_change_name
 | `0005_side_pots.sql` | Multi-way all-in side pots, uncalled-bet refunds, per-pot winners |
 | `0006_digital_cards.sql` | Digital dealer: deck, community board, hole cards |
 | `0007_card_privacy.sql` | **Required for digital cards.** Moves hole cards + undealt deck into private tables so players can't read opponents' cards (or the upcoming turn/river) from the network tab; cards served only via scoped RPCs |
+| `20260727193056_add_turn_timer.sql` | Optional per-turn clock: `games.turn_seconds`, `hands.turn_deadline`, a deadline trigger, and `expire_turn()` for auto check/fold |
 
 ### 4. Auth settings
 
@@ -145,6 +146,13 @@ Vercel.
 Once a game is **active**, the host opens the **table** and taps **Deal next
 hand**; players act on their own phones (fold/check/call/bet/raise/all-in) in
 turn, with blinds, the dealer button, and betting rounds enforced. The betting engine uses Postgres RPCs for strict server-side validation. Ending the game pre-fills the results form from each player's tracked stack.
+
+**Turn timer (optional).** The host can put players on a clock — **Off / 15s /
+30s / 60s** in the table settings. A countdown shows on whoever is to act; when
+it runs out that player is automatically **checked** if checking is free, or
+**folded** if facing a bet, and the action log marks it *timed out*. Expiry is
+validated against server time, so a client clock (or a tampered client) can't
+fold someone early. Off by default, so existing games are unaffected.
 
 ## Advanced Engine & Digital Cards (Phases 4 & 5)
 

@@ -103,6 +103,16 @@ export function HostTable({ gameId }: { gameId: string }) {
     });
   }
 
+  async function setTurnSeconds(secs: number) {
+    await run(async () => {
+      const { error } = await supabase
+        .from("games")
+        .update({ turn_seconds: secs })
+        .eq("id", gameId);
+      return { error };
+    });
+  }
+
   async function setDigitalCards(digital: boolean) {
     await run(async () => {
       const { error } = await supabase
@@ -226,6 +236,7 @@ export function HostTable({ gameId }: { gameId: string }) {
         sidePots={sidePots}
         showChips={showChips}
         showdownCards={showdownCards}
+        isHost
       />
 
       {error ? (
@@ -339,6 +350,36 @@ export function HostTable({ gameId }: { gameId: string }) {
               >
                 Digital (App Deals)
               </button>
+            </div>
+          </Card>
+
+          <Card className="flex items-center justify-between">
+            <span className="text-sm">
+              Turn timer{" "}
+              {game.turn_seconds > 0 ? (
+                <span className="text-muted">({game.turn_seconds}s)</span>
+              ) : null}
+            </span>
+            <div className="flex gap-2 text-xs">
+              {[
+                { label: "Off", secs: 0 },
+                { label: "15s", secs: 15 },
+                { label: "30s", secs: 30 },
+                { label: "60s", secs: 60 },
+              ].map((opt) => (
+                <button
+                  key={opt.secs}
+                  className={clsx(
+                    "hover:underline",
+                    game.turn_seconds === opt.secs
+                      ? "text-accent font-semibold"
+                      : "text-muted",
+                  )}
+                  onClick={() => setTurnSeconds(opt.secs)}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </Card>
 
