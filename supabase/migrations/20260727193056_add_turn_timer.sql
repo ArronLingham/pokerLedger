@@ -44,10 +44,17 @@ declare
   v_secs    int;
 begin
   -- OLD is not assigned on INSERT, so branch on TG_OP first.
+  --
+  -- `street` matters as much as `current_turn`: at the end of a betting round
+  -- current_turn is still the player who closed it, and that same player can be
+  -- first to act on the next street (e.g. heads-up, where the big blind closes
+  -- preflop and then acts first on the flop). Without the street check the
+  -- deadline would not refresh and they would be timed out instantly.
   if tg_op = 'INSERT' then
     v_changed := true;
   else
     v_changed := (new.current_turn is distinct from old.current_turn)
+              or (new.street is distinct from old.street)
               or (new.status is distinct from old.status);
   end if;
 

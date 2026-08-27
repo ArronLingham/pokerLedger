@@ -432,6 +432,44 @@ async function run() {
     await sb.from("games").delete().eq("id", gameId);
   }
 
+  // --- Scenario 11: deadline refreshes across a street change -------------
+  // Heads-up regression: the big blind CLOSES preflop and is also first to act
+  // on the flop, so current_turn does not change. If the deadline were only
+  // refreshed on current_turn changes, that player would inherit the preflop
+  // deadline and be timed out instantly.
+  {
+    const gameId = await createGame(hostId);
+    await setTurnSeconds(gameId, 5);
+    await addPlayers(gameId, [100, 100]);
+    const { data: handId } = await sb.rpc("start_hand", { p_game_id: gameId });
+
+    const hPre = await currentHand(gameId);
+    const preTurn = hPre.current_turn;
+    const preDeadline = hPre.turn_deadline;
+    assert("S11 preflop deadline set", !!preDeadline);
+
+    // SB/dealer calls, BB checks -> flop.
+    await act(handId, "call");
+    const hMid = await currentHand(gameId);
+    const bbPid = hMid.current_turn;
+    assert("S11 action passed to the big blind", bbPid !== preTurn);
+
+    await act(handId, "check");
+
+    const hFlop = await currentHand(gameId);
+    assert("S11 advanced to flop", hFlop.street === "flop", `street=${hFlop.street}`);
+    assert("S11 same player acts first on the flop (the tricky case)",
+      hFlop.current_turn === bbPid,
+      `expected ${bbPid}, got ${hFlop.current_turn}`);
+
+    // Compare server timestamps to each other — no client clock involved.
+    assert("S11 deadline REFRESHED for the new street",
+      new Date(hFlop.turn_deadline).getTime() > new Date(preDeadline).getTime(),
+      `preflop=${preDeadline} flop=${hFlop.turn_deadline}`);
+
+    await sb.from("games").delete().eq("id", gameId);
+  }
+
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);
   process.exit(failures === 0 ? 0 : 1);
 }
