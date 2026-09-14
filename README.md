@@ -4,7 +4,9 @@ A mobile-first app for running home poker games and keeping track of who owes wh
 
 [Watch the captioned demo](docs/demo/poker-ledger-demo.mp4) · [Architecture and tradeoffs](docs/architecture.md) · [Run locally](#run-locally)
 
-[![Poker Ledger: live table and player ledger](docs/demo/cover.png)](docs/demo/poker-ledger-demo.mp4)
+https://github.com/user-attachments/assets/c199ec33-ea53-4833-ac35-0178d6f8a615
+
+
 
 ## What it does
 
