@@ -1,182 +1,110 @@
 # Poker Ledger
 
-Track home poker games, balances, and exactly who owes whom — a mobile-first
-web app (PWA) you can run on your phone or laptop.
+A mobile-first app for running home poker games and keeping track of who owes whom. Built with **Next.js 16, React 19, TypeScript, Tailwind CSS 4, and Supabase/PostgreSQL**.
 
-This app is **feature-complete (Phases 1 through 5)**: accounts, player tracking, manual game recording, the Account Sheet (lifetime net P/L + settle-up), live games with QR-code joining, a full realtime betting engine with side pots, and a fully digital dealing mode.
+[Watch the captioned demo](docs/demo/poker-ledger-demo.mp4) · [Architecture and tradeoffs](docs/architecture.md) · [Run locally](#run-locally)
 
-## Tech stack
+[![Poker Ledger: live table and player ledger](docs/demo/cover.png)](docs/demo/poker-ledger-demo.mp4)
 
-- **Next.js 16** (App Router) + **TypeScript** + **Tailwind v4**
-- **Supabase** — Postgres, Auth (email + password), Row-Level Security
-- PWA manifest for "Add to Home Screen"
+## What it does
 
-## Setup
+- **Organize a game:** share a join code or QR code, admit guests, and keep the lobby synchronized.
+- **Play together:** track blinds, turn order, bets, all-ins and side pots across browser sessions. Use physical cards or the digital dealer.
+- **Resolve a hand:** integrate `pokersolver` to evaluate digital cards at showdown; the host confirms and awards the pots.
+- **Settle up:** close a completed game into the ledger, view lifetime profit/loss, and record suggested payments.
+- **Use it on a phone:** responsive controls, hold-to-peek cards, and a home-screen manifest. Internet access is required; offline play is not implemented.
 
-### 1. Create a Supabase project
+<table>
+<tr>
+<td width="70%"><img src="docs/demo/live-table.png" alt="Live poker table with community cards, pot and betting controls" /></td>
+<td width="30%"><img src="docs/demo/mobile-lobby.png" alt="Mobile lobby with QR code and approved players" /></td>
+</tr>
+</table>
 
-1. Go to [supabase.com](https://supabase.com) → **New project**.
-2. Once created, click **Connect** (top bar) → **App Frameworks** (or
-   **Project Settings → API**) and copy:
-   - **Project URL**
-   - the **publishable key** (`sb_publishable_...`)
+![Account Sheet showing fictional player balances and suggested payments](docs/demo/ledger.png)
 
-   > Note: Supabase's Connect screen also offers an "Add files" step that drops
-   > client helpers into `utils/supabase/`. **Skip it** — this project already
-   > has equivalents in `lib/supabase/`. You only need the env values.
+## Engineering highlights
 
-### 2. Configure environment
+| Concern | Implementation |
+| --- | --- |
+| Frontend and server boundary | Next.js App Router, React client components for live interactions, Server Actions for ledger workflows |
+| Shared game state | Supabase Realtime subscriptions refresh database-backed snapshots; reads are serialized to avoid older responses overwriting newer state |
+| Game rules | PostgreSQL functions enforce betting actions; hand locks serialize concurrent actions and payouts |
+| Access control | Supabase Auth, row-level policies, explicit RPC permissions, and private tables for hole cards and the undealt deck |
+| Financial consistency | A transactional closeout validates ownership, roster coverage, unique ledger mappings and balanced totals; unfinished hands cannot be closed |
+| Verification | An 11-scenario engine harness plus permission and closeout regressions, including rollback and concurrent submissions |
 
-```bash
-cp .env.local.example .env.local
-```
+The host is a trusted game administrator with manual controls. This is a home-game project, not an adversarial real-money poker platform. The shuffle uses PostgreSQL `random()`. Settlement suggestions use a greedy algorithm and do not guarantee the mathematically smallest number of payments.
 
-Fill in `.env.local`:
+## Run locally
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxx
-```
-
-(If your project still shows a legacy **anon** key instead, you can set
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` — the app accepts either.)
-
-### 3. Apply the database schema
-
-Migrations are managed with the **Supabase CLI** (installed as a dev dependency)
-— no copy-pasting SQL into the dashboard.
-
-**One-time setup** (per machine):
-
-```bash
-npx supabase login
-```
-
-```bash
-npx supabase link --project-ref fnvdzrnktwtyogjxmjfl
-```
-
-`link` prompts for your **database password** (Supabase dashboard → Project
-Settings → Database). The CLI stores it in your OS keychain; it never goes in
-the repo.
-
-**Apply any pending migrations:**
-
-```bash
-npm run db:push
-```
-
-**Check what's applied vs pending:**
-
-```bash
-npm run db:status
-```
-
-**Create a new migration** (writes a timestamped file in `supabase/migrations/`):
-
-```bash
-npm run db:new -- my_change_name
-```
-
-> If you're setting up a database that already had these migrations applied by
-> hand, mark them as applied instead of re-running them:
-> `npx supabase migration repair --status applied 0001 0002 0003 0004 0005 0006 0007`
-
-### Migration history
-
-| File | What it adds |
-|---|---|
-| `0001_init.sql` | Core tables, RLS, signup trigger |
-| `0002_live_games.sql` | Join codes, lobby roster, join RPCs, realtime |
-| `0003_chip_tracker.sql` | Stacks/blinds/button, `hands` + `hand_players` |
-| `0004_betting_engine.sql` | Betting RPCs: `start_hand`, `player_action`, `declare_winners` |
-| `0005_side_pots.sql` | Multi-way all-in side pots, uncalled-bet refunds, per-pot winners |
-| `0006_digital_cards.sql` | Digital dealer: deck, community board, hole cards |
-| `0007_card_privacy.sql` | **Required for digital cards.** Moves hole cards + undealt deck into private tables so players can't read opponents' cards (or the upcoming turn/river) from the network tab; cards served only via scoped RPCs |
-| `20260727193056_add_turn_timer.sql` | Optional per-turn clock: `games.turn_seconds`, `hands.turn_deadline`, a deadline trigger, and `expire_turn()` for auto check/fold |
-
-### 4. Auth settings
-
-- **Disable email confirmation (recommended for testing):**
-  **Authentication → Sign In / Providers → Email → turn off "Confirm email"**
-  so you can sign up and log in immediately.
-- **Enable anonymous sign-ins (required for guest join):**
-  **Authentication → Sign In / Providers → turn on "Anonymous sign-ins"**.
-  This is how guests join a game without an account (and can claim their history
-  later).
-
-### 5. Run
+Requires Node.js, npm and a Supabase development project.
 
 ```bash
 npm install
+cp .env.local.example .env.local
+```
+
+Set the project URL and publishable key in `.env.local`:
+
+```dotenv
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+The legacy `NEXT_PUBLIC_SUPABASE_ANON_KEY` is also supported. Never put a service-role key in a `NEXT_PUBLIC_*` variable.
+
+Link **your own** Supabase project and apply the committed migrations:
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npm run db:push
+```
+
+In Supabase Auth, enable anonymous sign-ins for guest joining. For the test harness and demo seed in a development project, disable email confirmation so the synthetic test accounts can sign in. Configure appropriate confirmation and abuse controls separately before public use.
+
+```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). To test on your phone,
-visit `http://<your-laptop-ip>:3000` on the same Wi-Fi, or deploy a preview to
-Vercel.
+Open `http://localhost:3000`. To join from a phone on the same Wi-Fi, open the host app through your computer's LAN address first; its QR code uses that address. `localhost` on a phone points to the phone, not your computer.
 
-## How it works (Phase 1)
-
-- **Sign up / log in** — your password protects your identity (no one can be you).
-- **Profile** — set a name and a default nickname (used at the table later).
-- **Players** — add the people you play with (they don't need accounts yet).
-- **Record a game** — enter each player's buy-in and cash-out; a live check
-  flags if cash-outs don't equal buy-ins.
-- **Account Sheet** — lifetime net per player, current "owed/owes" balance after
-  settlements, an auto-computed **settle-up** plan (fewest payments), and full
-  game history. "Mark paid" records a settlement and updates balances.
-
-## Live games (Phase 2)
-
-- **Start a live game** (dashboard → "Start live game") — generates a join
-  **code**, a shareable **link**, and a **QR code** in the lobby.
-- **Join** at `/join/<code>` (scan the QR or open the link):
-  - **Logged-in players** are auto-approved (their login proves who they are).
-  - **Guests** pick a nickname and join via an anonymous session, landing in a
-    **pending** state until the host approves them.
-- **Lobby** (host) — see players arrive in realtime, **approve/reject** guests,
-  then **Start** the game.
-- **End game → record results** — enter each player's buy-in/cash-out, map them
-  to a ledger player (existing or new), and it writes straight into the Account
-  Sheet from Phase 1.
-
-## Chip Tracker (Phase 3)
-
-Once a game is **active**, the host opens the **table** and taps **Deal next
-hand**; players act on their own phones (fold/check/call/bet/raise/all-in) in
-turn, with blinds, the dealer button, and betting rounds enforced. The betting engine uses Postgres RPCs for strict server-side validation. Ending the game pre-fills the results form from each player's tracked stack.
-
-**Turn timer (optional).** The host can put players on a clock — **Off / 15s /
-30s / 60s** in the table settings. A countdown shows on whoever is to act; when
-it runs out that player is automatically **checked** if checking is free, or
-**folded** if facing a bet, and the action log marks it *timed out*. Expiry is
-validated against server time, so a client clock (or a tampered client) can't
-fold someone early. Off by default, so existing games are unaffected.
-
-## Advanced Engine & Digital Cards (Phases 4 & 5)
-
-- **Chip Counter (Phase 4)** — A visual modal that lets players/host calculate exact chip values (e.g. 5 reds, 2 blues) using predefined chip denominations.
-- **Side Pots (Phase 4)** — If a player goes all-in, the engine correctly handles multiple side pots and uncalled bet refunds.
-- **Digital Cards (Phase 5)** — Play a full game of Texas Hold'em without physical cards! The app shuffles a 52-card deck, deals 2 hole cards to each player (hold-to-peek), and deals the community cards. At showdown, the app automatically evaluates the winning hands using standard poker rules and awards the pots.
-
-Verify the engine with the harness (needs all migrations applied and
-"Confirm email" off):
+## Verify
 
 ```bash
-node scripts/engine-test.mjs
+npm run lint
+npm run build
+npm run test:engine
+npm run test:security
 ```
 
-## Deploy
+The integration suites use the configured Supabase project. Run them against a development project: they create test Auth accounts and temporary games. Test games are removed on successful engine runs; the security suite cleans its games and ledger members in `finally`. Auth accounts remain and can be removed from the development project's dashboard.
 
-Push to GitHub and import into [Vercel](https://vercel.com/new). Add the two
-`NEXT_PUBLIC_SUPABASE_*` environment variables in the Vercel project settings.
-The Supabase backend is already hosted.
+See [validation notes](docs/validation.md) for the checks performed for this demo.
 
-## Roadmap
+## Reproduce the demo
 
-- [x] **Phase 1** — Accounts, player profiles, Account Sheet (P/L + settle-up).
-- [x] **Phase 2** — Live games (join by QR/code, lobby, anonymous guests).
-- [x] **Phase 3** — Chip Tracker (betting engine, real-time actions).
-- [x] **Phase 4** — Chip Counter UI & Side Pots logic.
-- [x] **Phase 5** — Digital Dealer (server-side dealing and auto-evaluation).
+```bash
+npm run demo:seed
+npm run build
+npm run start -- --port 3100
+```
+
+The seed creates a dedicated demo account, four fictional ledger members, three balanced historical games and a digital-card lobby. Its credentials and fixture IDs are saved in the gitignored `.env.demo.local.json` file with owner-only permissions. Re-running replaces only the recorded fixtures for this dedicated account.
+
+Open that local file to obtain the demo login. Use a separate browser profile or a different local hostname for the guest session. Do not commit credentials or share this writable account publicly.
+
+[Demo guide and captions](docs/demo/README.md) · [Resume wording](docs/resume.md)
+
+## Project map
+
+- `app/` — pages, server-rendered data and Server Actions
+- `components/live/` — table, betting controls, timer and realtime state
+- `lib/ledger.ts` — balances and suggested settlements
+- `supabase/migrations/` — schema, policies, betting engine and closeout transaction
+- `scripts/` — integration tests and fictional demo seed
+
+## Deployment
+
+The recorded demo runs locally against Supabase. No public frontend is currently deployed. To deploy, import the repository into Vercel and configure the two public Supabase environment variables. Apply all migrations to the target project and configure its Auth settings before opening access.

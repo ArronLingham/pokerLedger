@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Game,
@@ -15,6 +15,7 @@ import type {
 export type LiveSnapshot = {
   game: Game | null;
   players: GamePlayer[];
+  roster: GamePlayer[];
   hand: Hand | null;
   handPlayers: HandPlayer[];
   handActions: HandAction[];
@@ -38,6 +39,7 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
 } {
   const supabase = useMemo(() => createClient(), []);
   const [game, setGame] = useState<Game | null>(null);
+  const [roster, setRoster] = useState<GamePlayer[]>([]);
   const [players, setPlayers] = useState<GamePlayer[]>([]);
   const [hand, setHand] = useState<Hand | null>(null);
   const [handPlayers, setHandPlayers] = useState<HandPlayer[]>([]);
@@ -47,14 +49,13 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
   const [showdownCards, setShowdownCards] = useState<ShowdownCards[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+  const loadSnapshot = useCallback(async () => {
     const [{ data: g }, { data: ps }, { data: h }] = await Promise.all([
       supabase.from("games").select("*").eq("id", gameId).single(),
       supabase
         .from("game_players")
         .select("*")
         .eq("game_id", gameId)
-        .eq("status", "approved")
         .order("seat", { nullsFirst: false })
         .order("joined_at"),
       supabase
@@ -67,7 +68,9 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
     ]);
 
     setGame((g as Game) ?? null);
-    setPlayers((ps as GamePlayer[]) ?? []);
+    const nextRoster = (ps as GamePlayer[]) ?? [];
+    setRoster(nextRoster);
+    setPlayers(nextRoster.filter((p) => p.status === "approved"));
     setHand((h as Hand) ?? null);
 
     if (h?.id) {
@@ -105,9 +108,25 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
     setLoading(false);
   }, [supabase, gameId]);
 
+  // Coalesce event bursts and serialize reads so an older request cannot
+  // overwrite a newer hand. Events during a read trigger one more snapshot.
+  const inFlight = useRef<Promise<void> | null>(null);
+  const queued = useRef(false);
+  const refresh = useCallback(() => {
+    queued.current = true;
+    if (!inFlight.current) {
+      inFlight.current = (async () => {
+        while (queued.current) {
+          queued.current = false;
+          await loadSnapshot();
+        }
+      })().finally(() => { inFlight.current = null; });
+    }
+    return inFlight.current;
+  }, [loadSnapshot]);
+
   useEffect(() => {
     // Initial snapshot load; refresh() sets state asynchronously (after awaits).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
     const channel = supabase
       .channel(`game:${gameId}`)
@@ -125,6 +144,7 @@ export function useLiveGame(gameId: string): LiveSnapshot & {
   return {
     game,
     players,
+    roster,
     hand,
     handPlayers,
     handActions,

@@ -10,12 +10,14 @@
     "db:new": "supabase migration new",
     "db:push": "supabase db push",
     "db:status": "supabase migration list",
-    "test:engine": "node scripts/engine-test.mjs"
+    "test:engine": "node scripts/engine-test.mjs",
+    "test:security": "node scripts/security-test.mjs",
+    "demo:seed": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
-    "next": "16.2.9",
+    "next": "16.3.5",
     "pokersolver": "^2.1.4",
     "qrcode.react": "^4.2.0",
     "react": "19.2.4",
@@ -27,7 +29,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.9",
+    "eslint-config-next": "16.3.5",
     "supabase": "^2.109.1",
     "tailwindcss": "^4",
     "typescript": "^5"

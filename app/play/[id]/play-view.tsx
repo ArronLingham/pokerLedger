@@ -55,6 +55,7 @@ export function PlayView({
   const {
     game,
     players,
+    roster,
     hand,
     handPlayers,
     handActions,
@@ -63,18 +64,20 @@ export function PlayView({
     showdownCards,
     loading,
   } = useLiveGame(initialGame.id);
+  const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [showChips, setShowChips] = useState(false);
   const [isPeeking, setIsPeeking] = useState(false);
 
-  const nickname = player.nickname || "Player";
+  const livePlayer = roster.find((p) => p.id === player.id) ?? player;
+  const nickname = livePlayer.nickname || "Player";
   const gameName = (game ?? initialGame).name;
 
   // Approval / lifecycle states first.
-  if (player.status === "rejected") {
+  if (livePlayer.status === "rejected") {
     return <Status title="Not approved" body="The host didn’t add you to this game." tone="bad" nickname={nickname} gameName={gameName} />;
   }
-  if (player.status === "pending") {
+  if (livePlayer.status === "pending") {
     return <Status title="Waiting for approval" body="The host needs to let you in. Hang tight…" nickname={nickname} gameName={gameName} />;
   }
 
@@ -99,11 +102,13 @@ export function PlayView({
   async function act(action: ActionKind, amountTo?: number) {
     if (!hand) return;
     setBusy(true);
-    await supabase.rpc("player_action", {
+    setActionError(undefined);
+    const { error } = await supabase.rpc("player_action", {
       p_hand_id: hand.id,
       p_action: action,
       p_amount: amountTo ?? 0,
     });
+    if (error) setActionError(error.message);
     setBusy(false);
   }
 
@@ -123,6 +128,7 @@ export function PlayView({
         )}
       </div>
 
+      {actionError && <p role="alert" className="mb-3 text-negative">{actionError}</p>}
       <TableBoard
         game={game}
         players={players}
@@ -133,6 +139,35 @@ export function PlayView({
         showChips={showChips}
         showdownCards={showdownCards}
       />
+
+      {/* Digital Hole Cards */}
+      {game.digital_cards && myHoleCards.length > 0 ? (
+        <div className="mt-4 flex flex-col items-center">
+          <button
+            aria-label="Hold to peek at your cards"
+            onPointerCancel={() => setIsPeeking(false)}
+            onBlur={() => setIsPeeking(false)}
+            onKeyDown={(e) => {
+              if (e.key === " " || e.key === "Enter") { e.preventDefault(); setIsPeeking(true); }
+            }}
+            onKeyUp={() => setIsPeeking(false)}
+            onPointerDown={() => setIsPeeking(true)}
+            onPointerUp={() => setIsPeeking(false)}
+            onPointerLeave={() => setIsPeeking(false)}
+            onContextMenu={(e) => e.preventDefault()}
+            className="flex gap-2 p-2 bg-surface/80 backdrop-blur-md rounded-2xl border border-border shadow-xl transition-transform active:scale-95 touch-none select-none"
+          >
+            {myHoleCards.map((card, i) => (
+              <PlayingCard key={i} card={card} hidden={!isPeeking} className="w-20 shadow-sm" />
+            ))}
+          </button>
+          {!isPeeking && (
+            <div className="mt-1.5 text-[10px] font-medium uppercase tracking-widest text-muted/80 pointer-events-none">
+              Hold to peek
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {!hand || hand.status === "complete" ? (
         <p className="mt-6 text-center text-muted">
@@ -178,27 +213,6 @@ export function PlayView({
 
       <ActionLog handActions={handActions} players={players} />
 
-      {/* Digital Hole Cards */}
-      {game.digital_cards && myHoleCards.length > 0 ? (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center">
-          <button
-            onPointerDown={() => setIsPeeking(true)}
-            onPointerUp={() => setIsPeeking(false)}
-            onPointerLeave={() => setIsPeeking(false)}
-            onContextMenu={(e) => e.preventDefault()}
-            className="flex gap-2 p-2 bg-surface/80 backdrop-blur-md rounded-2xl border border-border shadow-xl transition-transform active:scale-95 touch-none select-none"
-          >
-            {myHoleCards.map((card, i) => (
-              <PlayingCard key={i} card={card} hidden={!isPeeking} className="w-20 shadow-sm" />
-            ))}
-          </button>
-          {!isPeeking && (
-            <div className="mt-1.5 text-[10px] font-medium uppercase tracking-widest text-muted/80 pointer-events-none">
-              Hold to peek
-            </div>
-          )}
-        </div>
-      ) : null}
     </main>
   );
 }

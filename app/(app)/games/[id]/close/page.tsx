@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/ui";
@@ -24,6 +25,16 @@ export default async function CloseGamePage({
   if (!game) notFound();
   if (game.host_id !== user!.id) redirect("/dashboard");
   if (game.status === "finished") redirect("/ledger");
+
+  const { data: unfinishedHand, error: handError } = await supabase
+    .from("hands").select("id").eq("game_id", id).neq("status", "complete").limit(1).maybeSingle();
+  if (handError) throw new Error("Could not check whether the current hand has finished.");
+  if (unfinishedHand) return (
+    <>
+      <PageHeader title="Finish the current hand" subtitle="Award the pot before recording cash-outs so every chip is accounted for." />
+      <Link href={`/games/${id}/table`} className="text-accent hover:underline">Return to the table</Link>
+    </>
+  );
 
   const [{ data: players }, { data: members }] = await Promise.all([
     supabase

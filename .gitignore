@@ -45,3 +45,7 @@ supabase/.branches/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local demo source captures and generated intermediate frames
+/docs/demo/captures/
+/docs/demo/scenes/

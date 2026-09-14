@@ -35,8 +35,8 @@ export function CloseGameForm({
       nickname: p.nickname || "Player",
       member_id: p.member_id ?? "",
       // Pre-filled from the chip tracker when it was used (0 => blank).
-      buy_in: p.buy_in ? String(p.buy_in) : "",
-      cash_out: p.stack ? String(p.stack) : "",
+      buy_in: String(p.buy_in),
+      cash_out: String(p.stack),
     })),
   );
   const [activeCounter, setActiveCounter] = useState<{
@@ -60,6 +60,12 @@ export function CloseGameForm({
 
   const diff = totalCashOut - totalBuyIn;
   const balanced = Math.abs(diff) < 0.005;
+
+  const chosenMembers = rows.map((r) => r.member_id).filter(Boolean);
+  const duplicateMembers = new Set(chosenMembers).size !== chosenMembers.length;
+  const validAmounts = rows.every((r) => [r.buy_in, r.cash_out].every((value) =>
+    /^\d+(?:\.\d{1,2})?$/.test(value.trim()) && Number(value) <= 9999999999.99,
+  ));
 
   const serialized = JSON.stringify(
     rows.map((r) => ({
@@ -121,7 +127,7 @@ export function CloseGameForm({
               >
                 <option value="">+ New player “{row.nickname}”</option>
                 {members.map((m) => (
-                  <option key={m.id} value={m.id}>
+                  <option key={m.id} value={m.id} disabled={chosenMembers.includes(m.id) && row.member_id !== m.id}>
                     {m.name}
                   </option>
                 ))}
@@ -169,8 +175,8 @@ export function CloseGameForm({
         </span>
       </Card>
 
-      <FormMessage error={state.error} />
-      <Button type="submit" disabled={pending}>
+      <FormMessage error={state.error || (duplicateMembers ? "Choose a different ledger member for each player." : !validAmounts ? "Enter nonnegative amounts with at most two decimal places." : !balanced ? "Cash-outs must equal buy-ins before closing." : undefined)} />
+      <Button type="submit" disabled={pending || duplicateMembers || !balanced || !validAmounts}>
         {pending ? "Saving…" : "Close game & save to ledger"}
       </Button>
 

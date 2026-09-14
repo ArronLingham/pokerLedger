@@ -51,7 +51,7 @@ export function ActionBar({
     showChips && denominations ? formatChipsString(v, denominations) : formatMoney(v);
 
   return (
-    <Card className="sticky bottom-20 flex flex-col gap-3">
+    <Card className="flex flex-col gap-3">
       <div className="flex gap-2">
         <Button
           variant="danger"

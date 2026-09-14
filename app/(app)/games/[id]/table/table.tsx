@@ -221,6 +221,8 @@ export function HostTable({ gameId }: { gameId: string }) {
               variant="secondary"
               className="px-3 py-2 text-sm"
               onClick={() => router.push(`/games/${gameId}/close`)}
+              disabled={!noHand || busy}
+              title={!noHand ? "Finish the hand and award its pot first" : undefined}
             >
               End game
             </Button>
